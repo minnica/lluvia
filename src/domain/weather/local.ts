@@ -40,12 +40,14 @@ export function assessLocalForecast(point: PointForecast, period: Period, now: n
   const covered = covers(period, point.values, "precipitationProbability") && covers(period, point.values, "precipitationAmount");
   const latestRetrieval = Math.max(0, ...point.values.map((value) => Date.parse(value.retrievedAt)));
   if (!covered || latestRetrieval + 20 * 60_000 < now || point.status === "unavailable") {
-    return { state: "insufficient-data", message: "Datos insuficientes para recomendar una salida", reason: !covered
-      ? "Faltan horas o valores para cubrir todo el periodo."
-      : "El pronóstico anterior está vencido; actualiza con conexión.", rows: ordered, covered };
+    return { state: "insufficient-data", message: "Faltan datos para recomendar", reason: !covered
+      ? "No hay datos completos para las próximas horas."
+      : "El pronóstico está vencido; actualiza con conexión.", rows: ordered, covered };
   }
-  const rainSignal = ordered.some((row) => (row.amountMm ?? 0) > 0 || (row.probability ?? 0) >= 0.5);
+  const rainSignal = ordered.some((row) => Date.parse(row.period.end) > Date.parse(period.start) &&
+    Date.parse(row.period.start) < Date.parse(period.end) &&
+    ((row.amountMm ?? 0) > 0 || (row.probability ?? 0) >= 0.5));
   return rainSignal
-    ? { state: "rain-signal", message: "Considera llevar impermeable", reason: "Hay precipitación prevista o al menos una hora con probabilidad del 50 % o mayor. Es una señal horaria, no una hora exacta de inicio.", rows: ordered, covered }
-    : { state: "no-rain-signal", message: "No se aprecia una señal clara de lluvia", reason: "El modelo no prevé acumulación y las probabilidades horarias son menores del 50 % en el periodo. La lluvia local aún es posible.", rows: ordered, covered };
+    ? { state: "rain-signal", message: "Considera llevar impermeable", reason: "Hay lluvia prevista o una hora con probabilidad de al menos 50 %.", rows: ordered, covered }
+    : { state: "no-rain-signal", message: "Sin señal clara de lluvia", reason: "Sin acumulación prevista y con probabilidades menores de 50 %. Puede llover localmente.", rows: ordered, covered };
 }

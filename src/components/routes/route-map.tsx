@@ -9,6 +9,9 @@ import "maplibre-gl/dist/maplibre-gl.css";
 type Props = { keyValue: string; points: Point[]; segments: SegmentAssessment[]; selectedId: string | null;
   onPick: (point: Point) => void; onSelect: (id: string) => void };
 
+// Equivalentes sRGB de los tokens dark neutral de shadcn; MapLibre necesita colores literales.
+const mapColors = { rain: "#ff2056", dry: "#00bc7d", unknown: "#a1a1a1", marker: "#171717", markerText: "#e5e5e5" };
+
 export default function RouteMap({ keyValue, points, segments, selectedId, onPick, onSelect }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
@@ -59,7 +62,7 @@ export default function RouteMap({ keyValue, points, segments, selectedId, onPic
       else {
         instance.addSource("route", { type: "geojson", data: collection });
         instance.addLayer({ id: "route-lines", type: "line", source: "route",
-          paint: { "line-color": ["match", ["get", "state"], "rain-signal", "#ad5b28", "no-rain-signal", "#157464", "#737c7b"],
+          paint: { "line-color": ["match", ["get", "state"], "rain-signal", mapColors.rain, "no-rain-signal", mapColors.dry, mapColors.unknown],
             "line-width": ["case", ["get", "selected"], 8, 5], "line-opacity": 0.9 } });
       }
       const pointFeatures: GeoJSON.Feature<GeoJSON.Point>[] = points.map((point, index) => ({
@@ -72,9 +75,9 @@ export default function RouteMap({ keyValue, points, segments, selectedId, onPic
       else {
         instance.addSource("waypoints", { type: "geojson", data: pointCollection });
         instance.addLayer({ id: "waypoint-circles", type: "circle", source: "waypoints", paint: {
-          "circle-radius": 11, "circle-color": "#153c39", "circle-stroke-width": 2, "circle-stroke-color": "#fff" } });
+          "circle-radius": 11, "circle-color": mapColors.marker, "circle-stroke-width": 2, "circle-stroke-color": mapColors.markerText } });
         instance.addLayer({ id: "waypoint-labels", type: "symbol", source: "waypoints",
-          layout: { "text-field": ["get", "label"], "text-size": 11 }, paint: { "text-color": "#fff" } });
+          layout: { "text-field": ["get", "label"], "text-size": 11 }, paint: { "text-color": mapColors.markerText } });
       }
       const coordinates = segments.length ? segments.flatMap((item) => item.segment.geometry) : points.map((point) => [point.lon, point.lat]);
       if (coordinates.length > 1 && (lastGeometry.current?.points !== points || lastGeometry.current?.segments !== segments)) {

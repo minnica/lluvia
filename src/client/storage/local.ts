@@ -7,7 +7,7 @@ import { savedRouteSchema, routeExportSchema, mergeImportedRoutes } from "@/doma
 import type { SavedRoute } from "@/domain/routing/favorites";
 
 export type SavedLocation = { id: string; name: string; point: Point; createdAt: string };
-export type Preferences = { selectedLocationId: string; minutes: number };
+export type Preferences = { selectedLocationId: string };
 export type ForecastSnapshot = { id: string; period: { start: string; end: string }; forecast: WeatherResponse };
 
 interface LocalDatabase extends DBSchema {
@@ -33,7 +33,7 @@ export async function loadLocalState() {
   const [locations, preferences] = await Promise.all([database.getAll("locations"), database.get("settings", "preferences")]);
   return {
     locations: locations.filter((location) => pointSchema.safeParse(location.point).success),
-    preferences: preferences && Number.isInteger(preferences.minutes) && preferences.minutes >= 30 && preferences.minutes <= 360 ? preferences : null,
+    preferences: preferences && typeof preferences.selectedLocationId === "string" ? preferences : null,
   };
 }
 

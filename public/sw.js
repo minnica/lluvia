@@ -1,4 +1,4 @@
-const CACHE = "lluvia-shell-v5";
+const CACHE = "lluvia-shell-v9";
 const SHELL = ["/", "/routes", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {

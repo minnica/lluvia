@@ -54,6 +54,14 @@ describe("consulta local horaria", () => {
     expect(() => normalizeOpenMeteo({ ...apiResponse, hourly: { ...apiResponse.hourly, time: ["2026-09-22T13:00", "2026-09-22T13:00", "2026-09-22T15:00"] } }, request, "home", retrievedAt)).toThrow();
   });
 
+  it("ignora la lluvia de horas anteriores al orientar una salida", () => {
+    const pastRain = normalizeOpenMeteo({ ...apiResponse, hourly: {
+      ...apiResponse.hourly, precipitation_probability: [80, 10, 10], precipitation: [2, 0, 0],
+    } }, request, "home", retrievedAt);
+    const future = { start: "2026-09-22T13:00:00Z", end: "2026-09-22T15:00:00Z" };
+    expect(assessLocalForecast(pastRain, future, Date.parse(retrievedAt)).state).toBe("no-rain-signal");
+  });
+
   it("consulta el endpoint de servidor y aísla el fallo de un punto en un lote", async () => {
     const calls: string[] = [];
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -74,7 +82,7 @@ describe("consulta local horaria", () => {
   it("devuelve solo el contrato normalizado y rechaza entradas inválidas", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-22T12:30:00Z"));
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json(apiResponse));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json(apiResponse));
     try {
       const invalid = await GET(new Request("https://localhost/api/weather?lat=91&lon=0&minutes=60"));
       expect(invalid.status).toBe(400);
@@ -85,6 +93,10 @@ describe("consulta local horaria", () => {
       expect(body.forecast.provider).toBe("open-meteo");
       expect(body.forecast.points[0].values[0].validPeriod.start).toBe("2026-09-22T12:00:00.000Z");
       expect(body.forecast.points[0].hourly).toBeUndefined();
+      const hourly = await GET(new Request("https://localhost/api/weather?lat=19.213346&lon=-98.75547&view=hourly"));
+      expect(hourly.status).toBe(200);
+      const hourlyBody = await hourly.json();
+      expect(hourlyBody.period).toEqual({ start: "2026-09-22T10:00:00.000Z", end: "2026-09-22T23:00:00.000Z" });
     } finally { fetchMock.mockRestore(); vi.useRealTimers(); }
   });
 });
