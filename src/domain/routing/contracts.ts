@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { instantSchema, pointSchema } from "@/domain/provider-common";
 import type { Point } from "@/domain/provider-common";
+import { distanceM } from "@/domain/routing/geometry";
 
 const nonNegative = z.number().finite().nonnegative();
 export const profileSchema = z.enum(["motorcycle", "car"]);
@@ -102,12 +103,10 @@ export function validateRoutingResponse(response: unknown, request: RoutingReque
   for (const route of parsed.routes) {
     const first = route.progress[0].position;
     const last = route.progress[route.progress.length - 1].position;
-    if (first.lat !== request.origin.lat || first.lon !== request.origin.lon ||
-        last.lat !== request.destination.lat || last.lon !== request.destination.lon ||
+    if (distanceM(first, request.origin) > 1000 || distanceM(last, request.destination) > 1000 ||
         route.requestedDepartureAt !== request.departureAt || route.requestedProfile !== request.profile) {
       throw new Error("La ruta no corresponde a la solicitud");
     }
   }
   return parsed;
 }
-

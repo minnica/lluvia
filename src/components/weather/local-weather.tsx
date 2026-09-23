@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { pointSchema, periodSchema } from "@/domain/provider-common";
 import type { Period, Point } from "@/domain/provider-common";
 import { weatherResponseSchema } from "@/domain/weather/contracts";
@@ -198,6 +199,8 @@ export default function LocalWeather() {
           <button type="button" className="primary-button" disabled={pending} onClick={() => void fetchForecast(selected, minutes)}>{pending ? "Consultando…" : "Actualizar pronóstico"}</button>
         </section>
       </div>
+      <section className="route-entry panel"><div><span className="eyebrow">Nuevo: recorridos</span><h2>Consulta la lluvia a lo largo del camino</h2><p>Indica origen, destino y paradas. La ruta usa horas de paso y muestra cada tramo con su señal horaria.</p></div>
+        <Link href="/routes" className="secondary-button">Abrir recorridos</Link></section>
       <footer className="app-footer"><p>Pronóstico provisional para uso personal. Una señal de lluvia no mide la seguridad del camino ni el estado del pavimento.</p>
         <p className="install-instructions">{installPrompt ? <button type="button" className="text-button" onClick={() => void install()}>Instalar aplicación</button> : "Para instalar: en iPhone, Compartir → Añadir a pantalla de inicio; en otros navegadores, usa la opción Instalar del menú."}</p>
       </footer>

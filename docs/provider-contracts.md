@@ -1,6 +1,6 @@
 # Contratos compartidos de proveedores
 
-Estado: tipos y validadores Zod de A0 implementados en `src/domain/provider-common.ts`, `src/domain/weather/contracts.ts` y `src/domain/routing/contracts.ts`; factorías de servidor en `src/server/providers`. A1 añadió el adaptador HTTP Open-Meteo y pruebas con respuestas sintéticas. La API de producción devolvió respuestas reales normalizadas para San Rafael con periodos de 30, 60 y 180 minutos y estado `ok`; esto confirma cobertura técnica, no precisión meteorológica local. Las interfaces siguen compartidas con el futuro recolector independiente. No se añadió framework de plugins ni microservicios.
+Estado: tipos y validadores Zod de A0 implementados en `src/domain/provider-common.ts`, `src/domain/weather/contracts.ts` y `src/domain/routing/contracts.ts`; factorías de servidor en `src/server/providers`. A1 añadió el adaptador HTTP Open-Meteo; la API de producción devolvió respuestas reales normalizadas para San Rafael con periodos de 30, 60 y 180 minutos y estado `ok`, lo que confirma cobertura técnica, no precisión meteorológica local. A2 añadió el adaptador TomTom y evaluación por tramo con pruebas sintéticas; falta comprobar respuestas TomTom reales. Las interfaces siguen compartidas con el futuro recolector independiente. No se añadió framework de plugins ni microservicios.
 
 ## Principios
 
@@ -101,7 +101,7 @@ interface WeatherProvider {
 
 Zod valida coordenadas, rangos, unidades compatibles con la variable, periodos UTC y su relación con `temporalMeaning`. `validAt` se usa para instantes; las demás clases requieren `validPeriod`. Un `issuedAt: null` exige la marca `unknown-issue-time`. `validateWeatherResponse` también verifica que cada punto solicitado tenga una respuesta correspondiente. Los futuros adaptadores convertirán intervalos precedentes/siguientes a límites explícitos; cuando esa semántica no se pueda resolver, el dato no participará en cálculos temporales precisos.
 
-Las excepciones globales se traducen a `ProviderError`; fallos de una ubicación no eliminan las respuestas válidas del lote. A1 impone timeout de 10 s a la consulta local; el límite general de concurrencia del orquestador se añadirá con las rutas en A2/A4. Una llamada por lotes puede consumir varias unidades de cuota.
+Las excepciones globales se traducen a `ProviderError`; fallos de una ubicación no eliminan las respuestas válidas del lote. A1 impone timeout de 10 s a la consulta local. A2 limita a cuatro las consultas concurrentes de Open-Meteo por ruta y a 30 s la solicitud coordinada; cuotas, deduplicación y caché de servidor siguen para A4. Una llamada por lotes puede consumir varias unidades de cuota.
 
 ### Adaptador Open-Meteo de A1
 
@@ -165,9 +165,11 @@ interface RoutingProvider {
 
 Validar tiempos/distancias acumulados monótonos y correspondencia con la geometría. No sustituir silenciosamente moto por coche. Si se ofrece una aproximación, mostrarla y conservar `effectiveProfile`. La geocodificación usa un módulo propio; cambiar routing no debe obligar a cambiar los favoritos.
 
+**Implementación A2 local:** `TomTomRoutingProvider` solicita Routing v1 con `extendedRouteRepresentation=distance` y `travelTime`, conserva los puntos intermedios y valida el progreso. Si TomTom omite tiempos de vértices, se interpolan únicamente entre dos puntos de progreso conocidos usando longitud de la polilínea; esto se advierte en la ruta. `effectiveProfile` procede de secciones `TRAVEL_MODE`: si faltan, es `unknown`, no se presupone moto. El perfil de motocicleta figura beta en la [documentación de TomTom](https://docs.tomtom.com/routing-api/documentation/tomtom-maps/v1/calculate-route). La respuesta normalizada y los errores quedan detrás de `/api/routes`. Las pruebas de contrato usan datos sintéticos; falta contrastar una respuesta real local con credenciales.
+
 ## Evaluación y cambio de proveedor
 
-La evaluación devolverá cada salida con intervalos de paso, valores originales etiquetados, categoría de exposición, cobertura espacio-temporal y estado `comparable`, `limited` o `insufficient-data`. El resultado no contiene una probabilidad agregada inventada. La confianza en los datos no es `1 - probabilidad de lluvia`.
+La evaluación de A2 devuelve tramos con intervalo de paso, valores horarios originales etiquetados, señal de exposición, cobertura espacio-temporal y estado `limited` o `insufficient-data`. A3 añadirá el estado `comparable` para alternativas de salida. El resultado no contiene una probabilidad agregada inventada. La confianza en los datos no es `1 - probabilidad de lluvia`.
 
 - Factoría del servidor seleccionada por `WEATHER_PROVIDER` y `ROUTING_PROVIDER`; ningún condicional del proveedor dentro de componentes visuales.
 - Configuración inicial: `open-meteo` y `tomtom`. Las claves de adaptadores no seleccionados son opcionales.
@@ -183,3 +185,5 @@ La evaluación devolverá cada salida con intervalos de paso, valores originales
 Un favorito conserva ID propio, nombre elegido, puntos introducidos por el usuario, preferencias de ruta, fechas y versión de esquema. Los IDs externos son referencias opcionales con su procedencia, no claves primarias del dominio. Las coordenadas o geometrías obtenidas de servicios de terceros solo se conservan según licencia; los datos introducidos por GPS/selección del usuario se distinguen de resultados licenciados.
 
 Separar `savedRoute` de `routeSnapshot` y `forecastSnapshot`. Los últimos dos llevan fuente, antigüedad y caducidad; la PWA no los presenta como vigentes sin una actualización válida.
+
+En A2 se implementó solo `savedRoute` persistente en IndexedDB v2; el resultado de ruta y el pronóstico por tramo viven en memoria durante la sesión y se recalculan al abrir. La exportación `lluvia-routes` v1 incluye coordenadas y preferencias introducidas o confirmadas por el usuario. Una búsqueda geocodificada no se puede guardar directamente como favorito hasta confirmar el punto sobre el mapa o ajustar sus coordenadas manualmente. No se archivan etiquetas, IDs, polilíneas ni respuestas crudas de TomTom. Falta verificar la licencia aplicable antes de considerar persistir directamente coordenadas derivadas de búsqueda.

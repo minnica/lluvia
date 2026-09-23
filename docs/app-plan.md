@@ -1,6 +1,6 @@
 # Track A — Aplicación utilizable
 
-Estado: **A0 y A1 terminadas; A2–A5 pendientes** (22 de septiembre de 2026). Contexto general en [README](../README.md); acuerdo técnico en [contratos de proveedores](provider-contracts.md).
+Estado: **A0 y A1 terminadas; A2 implementada localmente, pendiente de validación real con TomTom; A3–A5 pendientes** (22 de septiembre de 2026). Contexto general en [README](../README.md); acuerdo técnico en [contratos de proveedores](provider-contracts.md).
 
 ## Objetivo y regla de independencia
 
@@ -52,7 +52,7 @@ La app se usa para decidir antes de salir. Navegación giro a giro y seguimiento
 | --- | --- | --- | --- |
 | A0 ✅ | Base ejecutable y contratos | Entorno Node/npm y acceso a dependencias | Desarrollo/build funcionan; contratos validados con fixtures. Falta repetir `npm ci` con acceso al registro. |
 | A1 ✅ | Primera PWA instalable con consulta local real | A0 y acceso Open-Meteo | Consulta real por HTTPS y reapertura sin red desde la app instalada verificadas en teléfono. |
-| A2 | Rutas y favoritos | A1 y credenciales/licencias geográficas | Se guarda y consulta un recorrido con horas de paso. |
+| A2 🟡 | Rutas y favoritos | A1 y credenciales/licencias geográficas | Implementación y pruebas sintéticas listas; falta validar ruta real de unos 40 minutos, mapa y persistencia en teléfono con credenciales. |
 | A3 | Comparación de salidas | A2 | Cuatro alternativas evaluadas o marcadas como insuficientes, sin precisión inventada. |
 | A4 | MVP diario estabilizado | A1–A3 y comprobación funcional | Flujos críticos, errores, offline y consumo revisados; versión utilizable publicada. |
 | A5 | Evoluciones y sustitución de proveedor | Necesidad concreta y adaptador/configuración disponibles | Cambio reversible con mismo contrato y sin migrar favoritos. |
@@ -124,6 +124,16 @@ Decisiones concretas: el endpoint acepta una coordenada y 30–360 minutos; la p
 **Aceptación:** desde el icono instalado se obtiene una consulta real sin cuenta; una respuesta horaria no se convierte en un aviso de inicio al minuto. Sin conexión se puede abrir la interfaz y leer favoritos, con pronóstico previo claramente fechado y sin recomendación actual de salida.
 
 ## A2 — Recorridos y favoritos
+
+**Estado de implementación local (22 de septiembre de 2026):** `/routes` permite origen, destino, hasta cuatro paradas, perfil de moto/auto, preferencias para evitar vías, selección sobre MapLibre y búsqueda de direcciones en México. `/api/routes` devuelve el contrato de TomTom; `/api/route-weather` calcula ruta y pronósticos en cada tramo; `/api/geocode` devuelve resultados temporales. TomTom Routing v1 se solicita con tiempos/distancias de progreso; se interpolan los vértices que TomTom no informa directamente. Se muestra el perfil efectivo de sus secciones, incluida la situación «desconocido/mixto», y se advierte que moto es beta. La ruta se muestrea alrededor de cada cuatro minutos, se divide si un tramo supera unos 3 km y se añaden curvas grandes separadas de otras muestras; máximo 24 tramos. No hay elevación fiable por tramo para ajustar el relieve: se muestra esta limitación.
+
+El pronóstico Open-Meteo horario se consulta para el punto medio y hora de paso de cada tramo, con concurrencia limitada a cuatro llamadas. Verde y texto significan «sin señal clara», ocre «señal horaria» y gris/patrón «sin cobertura vigente»; los minutos sumados son *minutos de trayecto que cruzan una hora con señal*, no minutos realmente bajo lluvia. La probabilidad y acumulación expuestas pertenecen a la hora original. La línea temporal selecciona el tramo en el mapa y viceversa. Se muestra la distancia a la cuadrícula meteorológica por tramo. Un resultado con más de 20 minutos queda marcado como anterior.
+
+IndexedDB `lluvia-local` migra de v1 a v2 con almacén `routes`. Guarda intención y preferencias propias, nunca la geometría o pronósticos externos. Abrir un favorito vuelve a consultar ruta/clima. Exportar/importar usa `lluvia-routes` versión 1, valida todo el archivo, omite duplicados por contenido/nombre y renueva IDs en colisión. Para evitar archivar un resultado de geocodificación sin licencia confirmada, seleccionar una búsqueda solo llena el formulario para la consulta actual; antes de guardar el favorito el usuario debe confirmar el punto en el mapa o ajustarlo manualmente. El service worker v2 incluye la pantalla de rutas para leer favoritos sin conexión; el análisis sigue necesitando red.
+
+**Verificado localmente:** lint, tipos, 15 pruebas y build con Webpack pasan. La prueba de integración sintética ejercita `POST /api/route-weather` con una parada, diez tramos y llamadas meteorológicas por hora de paso; no consume APIs externas. No hay `TOMTOM_API_KEY`, `NEXT_PUBLIC_TOMTOM_MAP_KEY`, `.env.local` ni CLI de Vercel en el entorno. `next start` no puede abrir el puerto local (`listen EPERM`), así que faltan comprobación visual del mapa, llamada real a TomTom y aceptación en teléfono. El primer `next build` tras un ciclo de lint/tipos falló transitoriamente al leer `tsc --showConfig`; repetirlo aislado terminó correctamente. La consulta local A1 sigue operativa sin claves TomTom.
+
+**Para aceptar A2:** configurar claves TomTom autorizadas para Routing, Geocoding y Map Display; confirmar condiciones de almacenamiento de coordenadas derivadas; probar una ruta real aproximada de 40 minutos con parada en San Rafael y verificar horas de paso, perfil efectivo, mapa, guardado, reapertura, exportación/importación y respuesta sin clave en teléfono. Revisar consumo: una ruta puede consultar hasta 24 puntos meteorológicos; caché/cuotas se endurecen en A4. [Routing v1 y progreso](https://docs.tomtom.com/routing-api/documentation/tomtom-maps/v1/calculate-route), [Geocoding v1](https://docs.tomtom.com/geocoding-api/documentation/tomtom-maps/v1/geocode), [Map Tile v1](https://docs.tomtom.com/map-display-api/documentation/tomtom-maps/v1/raster/map-tile).
 
 - Implementar `TomTomRoutingProvider`, geometría y tiempos acumulados. Verificar si el perfil de moto solicitado es efectivo y exponer cualquier aproximación.
 - Añadir mapa MapLibre con atribuciones, geocodificación y selección de puntos sobre el mapa.

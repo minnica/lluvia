@@ -126,8 +126,7 @@ export class OpenMeteoProvider implements WeatherProvider {
   async getForecast(request: WeatherRequest): Promise<WeatherResponse> {
     const variables: Variable[] = ["precipitationProbability", "precipitationAmount", "precipitationRate"];
     if (request.variables.some((variable) => !variables.includes(variable))) throw failure("configuration", "Variable meteorológica no admitida", false);
-    const points: WeatherResponse["points"] = [];
-    for (const { id, position } of request.points) {
+    const loadPoint = async ({ id, position }: WeatherRequest["points"][number]): Promise<WeatherResponse["points"][number]> => {
       try {
         const url = endpoint();
         url.searchParams.set("latitude", String(position.lat));
@@ -151,14 +150,19 @@ export class OpenMeteoProvider implements WeatherProvider {
         }
         let raw: unknown;
         try { raw = await response.json(); } catch { throw failure("invalid-response", "Open-Meteo devolvió JSON inválido", false); }
-        points.push(normalizeOpenMeteo(raw, request, id, new Date().toISOString()));
+        return normalizeOpenMeteo(raw, request, id, new Date().toISOString());
       } catch (error) {
         const detail = error instanceof WeatherProviderFailure ? error.detail :
           { code: "invalid-response" as const, retryable: false, message: "No se pudo interpretar la respuesta meteorológica" };
         if (request.points.length === 1 || detail.code === "configuration") throw new WeatherProviderFailure(detail);
-        points.push({ pointId: id, requestedPoint: position, resolvedPoint: null, status: "unavailable", values: [],
-          availablePeriods: [], warnings: [], error: detail });
+        return { pointId: id, requestedPoint: position, resolvedPoint: null, status: "unavailable", values: [],
+          availablePeriods: [], warnings: [], error: detail };
       }
+    };
+    const points: WeatherResponse["points"] = [];
+    // Concurrency is bounded to avoid one long serial route query or a request burst.
+    for (let index = 0; index < request.points.length; index += 4) {
+      points.push(...await Promise.all(request.points.slice(index, index + 4).map(loadPoint)));
     }
     return validateWeatherResponse({ schemaVersion: 1, provider: this.id, adapterVersion, requestId: crypto.randomUUID(), points }, request);
   }

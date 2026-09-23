@@ -71,3 +71,44 @@ summary { cursor: pointer; font-size: 13px; font-weight: 700; color: #155f57; }
 @media (max-width: 800px) { .content-grid { grid-template-columns: 1fr; } .hero { padding: 46px 0 38px; } .app-footer { display: block; } .app-footer p + p { margin-top: 12px; } }
 @media (max-width: 520px) { .app-shell { padding: 0 16px; } .site-header { min-height: 66px; } .header-caption { display: none; } .hero h1 { font-size: clamp(43px, 12vw, 62px); } .panel { padding: 23px 19px; } .hourly-head, .hourly-row { grid-template-columns: 1.05fr .6fr 1.1fr; gap: 5px; font-size: 11px; } .hourly-row small { display: block; } }
 @media (display-mode: standalone) { .install-instructions { display: none; } }
+.brand { text-decoration: none; }
+.route-entry { display: flex; justify-content: space-between; align-items: center; gap: 22px; margin-top: 20px; }
+.route-entry h2 { margin: 8px 0; font: 400 28px Georgia, serif; }
+.route-entry p { margin: 0; color: #60716b; font-size: 13px; line-height: 1.5; }
+.route-entry .secondary-button { display: inline-flex; align-items: center; flex: none; text-decoration: none; }
+.route-hero { padding-bottom: 38px; }
+.route-grid { display: grid; grid-template-columns: minmax(300px, .78fr) minmax(440px, 1.22fr); gap: 18px; align-items: start; }
+.route-main { display: grid; gap: 18px; }
+.route-point { padding: 16px 0; border-bottom: 1px solid #e1e5dd; }
+.route-point-title { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 8px; font-size: 13px; }
+.route-point-title .text-button { text-align: right; font-size: 12px; }
+.route-point-title .text-button[aria-pressed="true"] { color: #a45b31; }
+.add-via { margin: 16px 0; }
+.avoid-options { border: 0; padding: 20px 0 0; }
+.avoid-options label { display: flex; align-items: center; gap: 9px; font-weight: 500; }
+.avoid-options input { min-height: auto; width: 18px; height: 18px; }
+.route-save { margin-top: 10px; width: 100%; }
+.search-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.search-results { list-style: none; margin: 0 0 12px; padding: 0; border: 1px solid #d4dad0; border-radius: 8px; }
+.search-results li + li { border-top: 1px solid #d4dad0; }
+.search-results button { display: block; width: 100%; padding: 12px; border: 0; background: #fff; text-align: left; color: #153c39; }
+.search-results button:hover { background: #edf3ed; }
+.route-map, .map-fallback { height: 370px; border-radius: 9px; overflow: hidden; background: #e7eee8; }
+.map-fallback { display: grid; place-items: center; padding: 25px; text-align: center; color: #526661; font-size: 13px; }
+.route-timeline { list-style: none; padding: 0; margin: 20px 0; display: grid; gap: 7px; }
+.timeline-item { display: grid; grid-template-columns: 95px 1fr; gap: 2px 12px; width: 100%; padding: 12px 14px; border: 1px solid #d1d9d1; border-left: 5px solid #157464; border-radius: 8px; background: #f7faf6; text-align: left; color: #254943; font-size: 12px; }
+.timeline-item.rain-signal { border-left-color: #ad5b28; background: #fbf4e9; }
+.timeline-item.unknown { border-left-color: #737c7b; background: repeating-linear-gradient(135deg,#f3f4f1,#f3f4f1 7px,#e9ece8 7px,#e9ece8 14px); }
+.timeline-item[aria-pressed="true"] { outline: 2px solid #153c39; }
+.timeline-item span:nth-of-type(2), .timeline-item small { grid-column: 2; }
+.timeline-time { font-variant-numeric: tabular-nums; }
+.saved-routes { margin-top: 18px; }
+.saved-routes ul { list-style: none; padding: 0; margin: 0; }
+.saved-routes li { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 13px 0; border-bottom: 1px solid #e1e5dd; }
+.saved-routes li small { display: block; margin-top: 4px; color: #60716b; }
+.saved-routes li > div:last-child { display: flex; align-items: center; gap: 14px; }
+.route-import-export { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+.route-import-export label { margin: 0; }
+.route-import-export input { width: auto; max-width: 100%; min-height: auto; border: 0; padding: 0; }
+@media (max-width: 920px) { .route-grid { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .route-entry, .saved-routes li { align-items: stretch; flex-direction: column; } .route-map, .map-fallback { height: 300px; } .route-point-title { display: block; } .route-point-title .text-button { display: block; margin-top: 5px; } }
