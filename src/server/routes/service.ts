@@ -20,8 +20,8 @@ export async function readRouteInput(request: Request) {
   return parsed.data;
 }
 
-export async function getRoute(input: z.infer<typeof routeInputSchema>, signal: AbortSignal) {
-  const request: RoutingRequest = { ...input, departureAt: new Date().toISOString(), signal };
+export async function getRoute(input: z.infer<typeof routeInputSchema>, signal: AbortSignal, departureAt = new Date().toISOString()) {
+  const request: RoutingRequest = { ...input, departureAt, signal };
   const provider = createRoutingProvider({ tomtom: () => new TomTomRoutingProvider() });
   const result = await provider.getRoutes(request);
   if (!result.routes.length) throw new RoutingFailure("unavailable", "No se encontró una ruta entre estos puntos");

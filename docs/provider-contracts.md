@@ -1,6 +1,6 @@
 # Contratos compartidos de proveedores
 
-Estado: tipos y validadores Zod de A0 implementados en `src/domain/provider-common.ts`, `src/domain/weather/contracts.ts` y `src/domain/routing/contracts.ts`; factorías de servidor en `src/server/providers`. A1 añadió el adaptador HTTP Open-Meteo; la API de producción devolvió respuestas reales normalizadas para San Rafael con periodos de 30, 60 y 180 minutos y estado `ok`, lo que confirma cobertura técnica, no precisión meteorológica local. A2 añadió el adaptador TomTom y evaluación por tramo con pruebas sintéticas; falta comprobar respuestas TomTom reales. Las interfaces siguen compartidas con el futuro recolector independiente. No se añadió framework de plugins ni microservicios.
+Estado: tipos y validadores Zod de A0 implementados en `src/domain/provider-common.ts`, `src/domain/weather/contracts.ts` y `src/domain/routing/contracts.ts`; factorías de servidor en `src/server/providers`. A1 añadió el adaptador HTTP Open-Meteo; la API de producción devolvió respuestas reales normalizadas para San Rafael con periodos de 30, 60 y 180 minutos y estado `ok`, lo que confirma cobertura técnica, no precisión meteorológica local. A2 añadió el adaptador TomTom y evaluación por tramo; A3 añadió la comparación de cuatro salidas y reutilización de series meteorológicas. Las pruebas de A2/A3 son sintéticas; falta comprobar respuestas TomTom reales. Las interfaces siguen compartidas con el futuro recolector independiente. No se añadió framework de plugins ni microservicios.
 
 ## Principios
 
@@ -101,7 +101,7 @@ interface WeatherProvider {
 
 Zod valida coordenadas, rangos, unidades compatibles con la variable, periodos UTC y su relación con `temporalMeaning`. `validAt` se usa para instantes; las demás clases requieren `validPeriod`. Un `issuedAt: null` exige la marca `unknown-issue-time`. `validateWeatherResponse` también verifica que cada punto solicitado tenga una respuesta correspondiente. Los futuros adaptadores convertirán intervalos precedentes/siguientes a límites explícitos; cuando esa semántica no se pueda resolver, el dato no participará en cálculos temporales precisos.
 
-Las excepciones globales se traducen a `ProviderError`; fallos de una ubicación no eliminan las respuestas válidas del lote. A1 impone timeout de 10 s a la consulta local. A2 limita a cuatro las consultas concurrentes de Open-Meteo por ruta y a 30 s la solicitud coordinada; cuotas, deduplicación y caché de servidor siguen para A4. Una llamada por lotes puede consumir varias unidades de cuota.
+Las excepciones globales se traducen a `ProviderError`; fallos de una ubicación no eliminan las respuestas válidas del lote. A1 impone timeout de 10 s a la consulta local. A2 limita a cuatro las consultas concurrentes de Open-Meteo por ruta y a 30 s la solicitud coordinada. A3 reutiliza los puntos repetidos de las cuatro rutas en un único lote por decisión; esto no equivale a caché entre solicitudes. Cuotas, deduplicación entre solicitudes y caché de servidor siguen para A4. Una llamada por lotes puede consumir varias unidades de cuota.
 
 ### Adaptador Open-Meteo de A1
 
@@ -169,7 +169,7 @@ Validar tiempos/distancias acumulados monótonos y correspondencia con la geomet
 
 ## Evaluación y cambio de proveedor
 
-La evaluación de A2 devuelve tramos con intervalo de paso, valores horarios originales etiquetados, señal de exposición, cobertura espacio-temporal y estado `limited` o `insufficient-data`. A3 añadirá el estado `comparable` para alternativas de salida. El resultado no contiene una probabilidad agregada inventada. La confianza en los datos no es `1 - probabilidad de lluvia`.
+La evaluación de A2 devuelve tramos con intervalo de paso, valores horarios originales etiquetados, señal de exposición, cobertura espacio-temporal y estado `limited` o `insufficient-data`. A3 añade `comparison` a `/api/route-weather`: cuatro alternativas con ruta propia, evaluación, sensibilidad de paso ±5/10 minutos, cambios de geometría/tiempos y error de routing individual; estado global `insufficient-data`, `limited` o `comparable`, horizonte requerido y motivo. El estado `comparable` exige cobertura completa en todos los escenarios, mismo producto/modelo/origen y resolución nativa y de salida conocida de hasta 15 minutos; Open-Meteo horario queda `limited` y no produce mejor salida. El resultado no contiene una probabilidad agregada inventada. La confianza en los datos no es `1 - probabilidad de lluvia`.
 
 - Factoría del servidor seleccionada por `WEATHER_PROVIDER` y `ROUTING_PROVIDER`; ningún condicional del proveedor dentro de componentes visuales.
 - Configuración inicial: `open-meteo` y `tomtom`. Las claves de adaptadores no seleccionados son opcionales.

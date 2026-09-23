@@ -34,11 +34,11 @@ function covers(values: WeatherValue[], start: number, end: number) {
   return false;
 }
 
-export function assessRoute(route: Route, forecast: WeatherResponse, now: number): RouteAssessment {
+export function assessRoute(route: Route, forecast: WeatherResponse, now: number, passageShiftMinutes = 0): RouteAssessment {
   const segments = sampleRoute(route).map((segment): SegmentAssessment => {
     const point = forecast.points.find((entry) => entry.pointId === segment.id);
-    const start = Date.parse(route.requestedDepartureAt) + segment.start.seconds * 1000;
-    const end = Date.parse(route.requestedDepartureAt) + segment.end.seconds * 1000;
+    const start = Date.parse(route.requestedDepartureAt) + passageShiftMinutes * 60_000 + segment.start.seconds * 1000;
+    const end = Date.parse(route.requestedDepartureAt) + passageShiftMinutes * 60_000 + segment.end.seconds * 1000;
     const probabilities = overlapping(point?.values ?? [], "precipitationProbability", start, end);
     const amounts = overlapping(point?.values ?? [], "precipitationAmount", start, end);
     const fresh = point && point.values.every((value) => Date.parse(value.retrievedAt) + 20 * 60_000 >= now);

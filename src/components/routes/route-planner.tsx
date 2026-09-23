@@ -7,6 +7,7 @@ import { pointSchema, type Point } from "@/domain/provider-common";
 import { routingResponseSchema, type Route } from "@/domain/routing/contracts";
 import { mergeImportedRoutes, routeExportSchema, type SavedRoute } from "@/domain/routing/favorites";
 import type { RouteAssessment } from "@/domain/routing/exposure";
+import type { DepartureComparison, DepartureOffset } from "@/domain/routing/comparison";
 import { distanceM } from "@/domain/routing/geometry";
 import { loadRoutes, saveRoute, deleteRoute, exportRoutes, importRoutes } from "@/client/storage/local";
 
@@ -15,7 +16,7 @@ type Entry = { lat: string; lon: string };
 type Draft = { name: string; origin: Entry; destination: Entry; via: Entry[]; profile: "motorcycle" | "car"; avoid: Array<"tolls" | "motorways" | "unpaved"> };
 type Target = "origin" | "destination" | number;
 type SearchResult = { label: string; point: Point };
-type Analysis = { route: Route; assessment: RouteAssessment; weatherError: string | null; source: string };
+type Analysis = { route: Route; assessment: RouteAssessment; comparison: DepartureComparison; weatherError: string | null; source: string };
 const initial: Draft = { name: "", origin: { lat: "19.213346", lon: "-98.755470" }, destination: { lat: "", lon: "" }, via: [], profile: "motorcycle", avoid: [] };
 const entry = (point: Point): Entry => ({ lat: String(point.lat), lon: String(point.lon) });
 const pointOf = (value: Entry): Point | null => {
@@ -38,6 +39,7 @@ export default function RoutePlanner() {
   const [busy, setBusy] = useState(false);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [selectedSegment, setSelectedSegment] = useState<string | null>(null);
+  const [selectedOffset, setSelectedOffset] = useState<DepartureOffset>(0);
   const [clock, setClock] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
   const requestNumber = useRef(0);
@@ -51,7 +53,7 @@ export default function RoutePlanner() {
   const update = (next: Draft) => {
     requestNumber.current++;
     activeRequest.current?.abort();
-    setBusy(false); setDraft(next); setAnalysis(null); setSelectedSegment(null);
+    setBusy(false); setDraft(next); setAnalysis(null); setSelectedSegment(null); setSelectedOffset(0);
   };
   const setEntry = (which: Target, value: Entry, fromGeocode = false) => {
     setGeocoded((current) => {
@@ -65,6 +67,9 @@ export default function RoutePlanner() {
   const validPoints = useMemo(() => [draft.origin, ...draft.via, draft.destination].map(pointOf)
     .filter((point): point is Point => point !== null), [draft.origin, draft.via, draft.destination]);
   const outdated = analysis ? Date.parse(analysis.route.retrievedAt) + 20 * 60_000 < clock : false;
+  const displayed = analysis?.comparison.alternatives.find((item) => item.offsetMinutes === selectedOffset);
+  const displayRoute = displayed?.route ?? analysis?.route;
+  const displayAssessment = displayed?.assessment ?? analysis?.assessment;
 
   async function analyze(value: Draft = draft) {
     const origin = pointOf(value.origin);
@@ -75,7 +80,7 @@ export default function RoutePlanner() {
     activeRequest.current?.abort();
     const controller = new AbortController();
     activeRequest.current = controller;
-    setBusy(true); setStatus("Calculando ruta y pronóstico para cada tramo…"); setAnalysis(null);
+    setBusy(true); setStatus("Comparando cuatro salidas y consultando el pronóstico compartido…"); setAnalysis(null); setSelectedOffset(0);
     try {
       const response = await fetch("/api/route-weather", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ origin, destination, via, profile: value.profile, avoid: value.avoid }), cache: "no-store", signal: controller.signal });
@@ -84,11 +89,12 @@ export default function RoutePlanner() {
       if (!response.ok) throw new Error(json.error ?? "No se pudo analizar el recorrido");
       const routing = routingResponseSchema.parse(json.routing);
       const route = routing.routes[0];
-      if (!route || !json.assessment || !Array.isArray(json.assessment.segments)) throw new Error("Respuesta de recorrido incompleta");
-      setAnalysis({ route, assessment: json.assessment as RouteAssessment, weatherError: json.weatherError,
+      if (!route || !json.assessment || !Array.isArray(json.assessment.segments) || !json.comparison ||
+          !Array.isArray(json.comparison.alternatives) || json.comparison.alternatives.length !== 4) throw new Error("Respuesta de recorrido incompleta");
+      setAnalysis({ route, assessment: json.assessment as RouteAssessment, comparison: json.comparison as DepartureComparison, weatherError: json.weatherError,
         source: json.forecast?.provider ?? "desconocida" });
       setClock(Date.parse(route.retrievedAt));
-      setStatus("Recorrido actualizado. Las horas de paso se calculan desde la salida actual.");
+      setStatus("Cuatro salidas calculadas desde el mismo instante de decisión.");
     } catch (error) { if (currentRequest === requestNumber.current) setStatus(error instanceof Error ? error.message : "No se pudo analizar el recorrido"); }
     finally { if (currentRequest === requestNumber.current) { setBusy(false); activeRequest.current = null; } }
   }
@@ -185,7 +191,7 @@ export default function RoutePlanner() {
           onChange={(event) => update({ ...draft, profile: event.target.value as Draft["profile"] })}><option value="motorcycle">Motocicleta (beta en TomTom)</option><option value="car">Automóvil</option></select>
         <fieldset className="avoid-options"><legend>Evitar si es posible</legend>{(["tolls", "motorways", "unpaved"] as const).map((item) => <label key={item}><input type="checkbox" checked={draft.avoid.includes(item)} onChange={(event) => update({ ...draft,
           avoid: event.target.checked ? [...draft.avoid, item] : draft.avoid.filter((value) => value !== item) })} />{item === "tolls" ? "Peajes" : item === "motorways" ? "Autopistas" : "Vías sin pavimentar"}</label>)}</fieldset>
-        <button type="button" className="primary-button" disabled={busy} onClick={() => void analyze()}>{busy ? "Analizando…" : "Analizar recorrido ahora"}</button>
+        <button type="button" className="primary-button" disabled={busy} onClick={() => void analyze()}>{busy ? "Analizando…" : "Comparar cuatro salidas"}</button>
         <button type="button" className="secondary-button route-save" onClick={() => void saveFavorite()}>Guardar como favorito</button>
       </section>
       <div className="route-main"><section className="panel" aria-labelledby="route-map-title"><div className="section-heading"><span className="section-number">02</span><h2 id="route-map-title">Mapa y dirección</h2></div>
@@ -196,27 +202,50 @@ export default function RoutePlanner() {
         {searchResults.length > 0 && <ul className="search-results">{searchResults.map((item, index) => <li key={index}><button type="button" onClick={() => {
           setEntry(target, entry(item.point), true); setSearchResults([]); setStatus("Coordenadas seleccionadas. Para guardarlas como favorito, confirma el punto en el mapa o ajusta sus coordenadas.");
         }}>{item.label}</button></li>)}</ul>}
-        <RouteMap keyValue={process.env.NEXT_PUBLIC_TOMTOM_MAP_KEY ?? ""} points={validPoints} segments={analysis?.assessment.segments ?? noSegments}
+        <RouteMap keyValue={process.env.NEXT_PUBLIC_TOMTOM_MAP_KEY ?? ""} points={validPoints} segments={displayAssessment?.segments ?? noSegments}
           selectedId={selectedSegment} onPick={(point) => { setEntry(target, entry(point)); setStatus("Punto elegido en el mapa."); }} onSelect={setSelectedSegment} />
         <p className="footnote">Mapa © TomTom. Verde: sin señal de lluvia; ocre: señal horaria; gris: sin datos suficientes. El color no describe seguridad vial.</p>
       </section>
       <section className="panel route-analysis" aria-labelledby="analysis-title"><div className="section-heading"><span className="section-number">03</span><h2 id="analysis-title">Exposición por tramo</h2></div>
         <p className="status-line" role="status">{status}</p>
-        {analysis ? <>
-          <div className={`recommendation ${outdated || analysis.assessment.state === "insufficient-data" ? "insufficient-data" : analysis.assessment.rainSignalMinutes ? "rain-signal" : ""}`}>
-            <span className="recommendation-kicker">{outdated ? "Consulta anterior" : analysis.assessment.state === "insufficient-data" ? "Cobertura incompleta" : "Señal horaria del recorrido"}</span>
-            <h3>{outdated ? "Vuelve a consultar antes de salir" : analysis.assessment.state === "insufficient-data" ? "Faltan datos para algunos tramos" : analysis.assessment.rainSignalMinutes > 0
-              ? `Señal de lluvia en ${analysis.assessment.rainSignalMinutes} min de trayecto` : "Sin señal clara de lluvia en la ruta"}</h3>
+        {analysis && displayRoute && displayAssessment ? <>
+          <div className={`recommendation ${outdated || displayAssessment.state === "insufficient-data" ? "insufficient-data" : displayAssessment.rainSignalMinutes ? "rain-signal" : ""}`}>
+            <span className="recommendation-kicker">{outdated ? "Consulta anterior" : displayAssessment.state === "insufficient-data" ? "Cobertura incompleta" : `Salida +${selectedOffset} min · señal horaria`}</span>
+            <h3>{outdated ? "Vuelve a consultar antes de salir" : displayAssessment.state === "insufficient-data" ? "Faltan datos para algunos tramos" : displayAssessment.rainSignalMinutes > 0
+              ? `Señal de lluvia en ${displayAssessment.rainSignalMinutes} min de trayecto` : "Sin señal clara de lluvia en la ruta"}</h3>
             <p>{outdated ? "La ruta y el pronóstico tienen más de 20 minutos; el detalle siguiente es histórico." :
-              `Son minutos de trayecto que cruzan horas con señal, no minutos reales de lluvia. ${analysis.assessment.unknownMinutes > 0 ? `${analysis.assessment.unknownMinutes} min no evaluables.` : "La lluvia local aún es posible."}`}</p>
+              `Son minutos de trayecto que cruzan horas con señal, no minutos reales de lluvia. ${displayAssessment.unknownMinutes > 0 ? `${displayAssessment.unknownMinutes} min no evaluables.` : "La lluvia local aún es posible."}`}</p>
           </div>
-          <p className="meta">Ruta: {(analysis.route.distanceM / 1000).toFixed(1)} km · {Math.round(analysis.route.durationSeconds / 60)} min · salida {formatTime(Date.parse(analysis.route.requestedDepartureAt))}. Routing: TomTom ({analysis.route.effectiveProfile}); clima: {analysis.source}, horario. Calculado: {formatTime(Date.parse(analysis.route.retrievedAt))}.</p>
+          <p className="meta">Ruta: {(displayRoute.distanceM / 1000).toFixed(1)} km · {Math.round(displayRoute.durationSeconds / 60)} min · salida {formatTime(Date.parse(displayRoute.requestedDepartureAt))}. Routing: TomTom ({displayRoute.effectiveProfile}); clima: {analysis.source}, horario. Calculado: {formatTime(Date.parse(displayRoute.retrievedAt))}.</p>
+          <section className="departure-comparison" aria-labelledby="comparison-title">
+            <h3 id="comparison-title">¿Salir ahora o esperar?</h3>
+            <p>{outdated ? "Esta comparación es anterior. Actualiza el recorrido antes de decidir." : analysis.comparison.reason}</p>
+            <p className="footnote">Horizonte mínimo: {analysis.comparison.requiredHorizonMinutes} min desde la decisión, con ±10 min de margen de paso y {analysis.comparison.forecastAgeMinutes} min de antigüedad conocida. La hora de emisión del modelo puede ser desconocida.</p>
+            <div className="departure-options">{analysis.comparison.alternatives.map((option) => {
+              const signals = option.assessment ? [option.assessment.rainSignalMinutes, ...option.sensitivity.map((scenario) => scenario.rainSignalMinutes)] : [];
+              const low = signals.length ? Math.min(...signals) : null;
+              const high = signals.length ? Math.max(...signals) : null;
+              return <button type="button" key={option.offsetMinutes} className="departure-option" aria-pressed={selectedOffset === option.offsetMinutes}
+                disabled={!option.route || !option.assessment} onClick={() => { setSelectedOffset(option.offsetMinutes); setSelectedSegment(null); }}>
+                <strong>{option.offsetMinutes === 0 ? "Ahora" : `+${option.offsetMinutes} min`}</strong>
+                <span>{option.route ? `${formatTime(Date.parse(option.route.requestedDepartureAt))} · ${Math.round(option.route.durationSeconds / 60)} min de viaje` : "Ruta no disponible"}</span>
+                <span>{option.assessment ? option.assessment.state === "insufficient-data" || option.sensitivity.some((scenario) => !scenario.complete)
+                  ? `Cobertura incompleta: ${option.assessment.unknownMinutes} min sin evaluar; el margen también puede faltar`
+                  : `${option.assessment.rainSignalMinutes} min con señal horaria; margen ±5/10 min: ${low}–${high} min`
+                  : option.routingError}</span>
+                {option.routeChanged && <small>TomTom cambió la geometría de esta salida.</small>}
+                {option.timingChanged && <small>TomTom cambió los tiempos de paso de esta salida.</small>}
+                {option.durationDeltaMinutes !== null && option.durationDeltaMinutes !== 0 && <small>Duración {option.durationDeltaMinutes > 0 ? "+" : ""}{option.durationDeltaMinutes} min frente a ahora.</small>}
+              </button>;
+            })}</div>
+            <p className="footnote">El margen ±5/10 min es una prueba de sensibilidad de la hora de paso, no un intervalo estadístico. Estas cifras tampoco son minutos reales circulando bajo lluvia. No se suman probabilidades horarias del recorrido.</p>
+          </section>
           {analysis.weatherError && <p className="helper" role="alert">Pronóstico: {analysis.weatherError}</p>}
-          {analysis.route.warnings.map((warning) => <p className="footnote" key={warning}>{warning}</p>)}
-          {analysis.assessment.warnings.map((warning) => <p className="footnote" key={warning}>{warning}</p>)}
-          <ol className="route-timeline" aria-label="Línea temporal de la ruta">{analysis.assessment.segments.map((item) => {
-            const start = Date.parse(analysis.route.requestedDepartureAt) + item.segment.start.seconds * 1000;
-            const end = Date.parse(analysis.route.requestedDepartureAt) + item.segment.end.seconds * 1000;
+          {displayRoute.warnings.map((warning) => <p className="footnote" key={warning}>{warning}</p>)}
+          {displayAssessment.warnings.map((warning) => <p className="footnote" key={warning}>{warning}</p>)}
+          <ol className="route-timeline" aria-label="Línea temporal de la ruta">{displayAssessment.segments.map((item) => {
+            const start = Date.parse(displayRoute.requestedDepartureAt) + item.segment.start.seconds * 1000;
+            const end = Date.parse(displayRoute.requestedDepartureAt) + item.segment.end.seconds * 1000;
             return <li key={item.segment.id}><button type="button" aria-pressed={selectedSegment === item.segment.id}
               onClick={() => setSelectedSegment(item.segment.id)} className={`timeline-item ${item.state}`}>
               <span className="timeline-time">{formatTime(start)}–{formatTime(end)}</span><strong>{item.state === "unknown" ? "Sin datos" : item.state === "rain-signal" ? "Señal de lluvia" : "Sin señal clara"}</strong>

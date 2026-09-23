@@ -1,6 +1,6 @@
 # Track A — Aplicación utilizable
 
-Estado: **A0 y A1 terminadas; A2 implementada localmente, pendiente de validación real con TomTom; A3–A5 pendientes** (22 de septiembre de 2026). Contexto general en [README](../README.md); acuerdo técnico en [contratos de proveedores](provider-contracts.md).
+Estado: **A0 y A1 terminadas; A2 y A3 implementadas localmente, pendientes de validación real con TomTom y en teléfono; A4–A5 pendientes** (22 de septiembre de 2026). Contexto general en [README](../README.md); acuerdo técnico en [contratos de proveedores](provider-contracts.md).
 
 ## Objetivo y regla de independencia
 
@@ -53,7 +53,7 @@ La app se usa para decidir antes de salir. Navegación giro a giro y seguimiento
 | A0 ✅ | Base ejecutable y contratos | Entorno Node/npm y acceso a dependencias | Desarrollo/build funcionan; contratos validados con fixtures. Falta repetir `npm ci` con acceso al registro. |
 | A1 ✅ | Primera PWA instalable con consulta local real | A0 y acceso Open-Meteo | Consulta real por HTTPS y reapertura sin red desde la app instalada verificadas en teléfono. |
 | A2 🟡 | Rutas y favoritos | A1 y credenciales/licencias geográficas | Implementación y pruebas sintéticas listas; falta validar ruta real de unos 40 minutos, mapa y persistencia en teléfono con credenciales. |
-| A3 | Comparación de salidas | A2 | Cuatro alternativas evaluadas o marcadas como insuficientes, sin precisión inventada. |
+| A3 🟡 | Comparación de salidas | A2 | Implementación y pruebas sintéticas listas; falta validar rutas reales y visualización en teléfono. |
 | A4 | MVP diario estabilizado | A1–A3 y comprobación funcional | Flujos críticos, errores, offline y consumo revisados; versión utilizable publicada. |
 | A5 | Evoluciones y sustitución de proveedor | Necesidad concreta y adaptador/configuración disponibles | Cambio reversible con mismo contrato y sin migrar favoritos. |
 
@@ -148,6 +148,14 @@ IndexedDB `lluvia-local` migra de v1 a v2 con almacén `routes`. Guarda intenci�
 **Aceptación:** se puede crear, guardar, reabrir y analizar un recorrido aproximado de 40 minutos. Se consideran puntos intermedios y horas de paso; no solo salida y destino. Si falta la clave de routing, la consulta local de A1 sigue funcionando.
 
 ## A3 — Comparación de salida
+
+**Implementada localmente el 22 de septiembre de 2026.** `POST /api/route-weather` fija un instante de decisión y pide cuatro rutas TomTom con las mismas paradas, perfil y preferencias para ahora, +10, +20 y +30 minutos. Conserva la geometría y tiempos propios de cada salida; si una alternativa falla, devuelve su error sin sustituirla por la ruta de ahora. Muestrea cada ruta, deduplica puntos meteorológicos por coordenadas a seis decimales y hace un solo lote Open-Meteo para el periodo completo (incluye ±10 minutos de margen). Cada alternativa reutiliza las series correspondientes a sus puntos. La respuesta conserva la evaluación A2 de la primera salida y añade `comparison` con las cuatro rutas, evaluaciones, cambios de geometría/tiempo, sensibilidad y motivo del estado.
+
+El horizonte mínimo comunicado parte del instante de decisión: la última hora de llegada entre las cuatro rutas, al menos 30 minutos de espera más la mayor duración, 10 minutos de margen y la antigüedad conocida de los valores. Un viaje de 40 minutos requiere 80 minutos si no hay antigüedad. La hora de emisión de Open-Meteo no está disponible y se indica por separado. La sensibilidad desplaza las horas de paso −10, −5, +5 y +10 minutos; solo son escenarios, no intervalos calibrados. La cobertura debe ser continua y vigente en todas las salidas y escenarios. Si falta ruta, dato o margen, el estado es `insufficient-data`.
+
+Con Open-Meteo horario y resolución nativa desconocida, la comparación queda `limited`: muestra señal por hora y minutos de trayecto que cruzan esas horas, pero no selecciona una espera como mejor. Un futuro producto con resolución nativa y de salida de hasta 15 minutos, fuente/modelo comparables, cobertura completa y perfil efectivo consistente podrá llegar a `comparable`; solo se destaca una salida si su peor escenario tiene menos señal que el mejor escenario de todas las otras. La espera también tiene coste y la señal no describe seguridad vial. La pantalla permite elegir alternativa y sincroniza sus tramos con mapa y línea temporal. El service worker sube a v3 para actualizar la interfaz sin conexión.
+
+**Verificado:** lint, tipos, 19 pruebas y build Webpack pasan. Las pruebas sintéticas cubren lluvia al inicio y final, ausencia de señal, valores nulos, horizonte corto, una alternativa sin ruta, cambios de geometría/tiempo y reutilización de 10 puntos meteorológicos en cuatro salidas idénticas. No se han usado APIs reales de TomTom ni se ha comprobado visualmente en teléfono; la aceptación funcional real de A2 y A3 sigue pendiente de credenciales, licencia y entorno accesible. A4 debe revisar coste, cuotas, límites y caché de esta consulta de cuatro rutas.
 
 - Evaluar ahora, +10, +20 y +30 minutos desde un mismo instante de decisión.
 - Mantener ruta/preferencias comparables. Si el proveedor cambia ruta o tiempos por la hora de salida, incorporar esa diferencia explícitamente y consultar ubicaciones nuevas.

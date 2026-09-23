@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { assessRoute } from "@/domain/routing/exposure";
+import { compareDepartures } from "@/domain/routing/comparison";
 import { sampleRoute } from "@/domain/routing/sampling";
 import { mergeImportedRoutes, routeExportSchema, type SavedRoute } from "@/domain/routing/favorites";
 import type { RoutingRequest } from "@/domain/routing/contracts";
@@ -108,12 +109,85 @@ describe("recorridos A2 con datos sintéticos", () => {
       expect(body.assessment.segments).toHaveLength(10);
       expect(body.assessment.unknownMinutes).toBe(0);
       expect(body.assessment.segments[9].segment.midpoint.seconds).toBe(2280);
-      expect(fetchMock).toHaveBeenCalledTimes(11);
+      expect(body.comparison.alternatives.map((item: { offsetMinutes: number }) => item.offsetMinutes)).toEqual([0, 10, 20, 30]);
+      expect(body.comparison.requiredHorizonMinutes).toBe(80);
+      expect(body.comparison.state).toBe("insufficient-data");
+      expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("api.tomtom.com"))).toHaveLength(4);
+      expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("api.open-meteo.com"))).toHaveLength(10);
+      expect(body.forecast.points).toHaveLength(10); // Cuatro rutas idénticas comparten los mismos puntos.
     } finally {
       fetchMock.mockRestore();
       if (previousKey === undefined) delete process.env.TOMTOM_API_KEY;
       else process.env.TOMTOM_API_KEY = previousKey;
       vi.useRealTimers();
     }
+  });
+});
+
+describe("comparación A3 con datos sintéticos", () => {
+  const departures = [0, 10, 20, 30].map((offset) => ({ ...route,
+    requestedDepartureAt: new Date(Date.parse(request.departureAt) + offset * 60_000).toISOString() }));
+  const periods = [11, 12, 13].map((hour) => ({ start: `2026-09-22T${hour}:00:00Z`,
+    end: `2026-09-22T${hour + 1}:00:00Z` }));
+  function forecastFor(index: number, amounts: Array<number | null>, availableHours = 3): WeatherResponse {
+    return { schemaVersion: 1, provider: "open-meteo", adapterVersion: "synthetic", requestId: `a${index}`,
+      points: sampleRoute(departures[index]).map((segment) => ({ pointId: segment.id,
+        requestedPoint: segment.midpoint.position, resolvedPoint: segment.midpoint.position, status: "ok",
+        values: periods.slice(0, availableHours).flatMap((hour, hourIndex) => [
+          { ...value("precipitationProbability", amounts[hourIndex] === null ? null : amounts[hourIndex]! > 0 ? 0.7 : 0.1), validPeriod: hour },
+          { ...value("precipitationAmount", amounts[hourIndex]), validPeriod: hour },
+        ]), availablePeriods: periods.slice(0, availableHours).map((hour) => ({ product: "synthetic-hourly", period: hour })),
+        warnings: [], error: null })) };
+  }
+  const compare = (amounts: Array<number | null>, availableHours = 3) => compareDepartures(
+    departures, departures.map((_, index) => forecastFor(index, amounts, availableHours)),
+    [null, null, null, null], request.departureAt, Date.parse(request.departureAt),
+  );
+
+  it("exige 80 minutos para 40 de viaje, 30 de espera y 10 de margen", () => {
+    const result = compare([0, 0, 0], 2);
+    expect(result.requiredHorizonMinutes).toBe(80);
+    expect(result.state).toBe("insufficient-data");
+    expect(result.bestOffsetMinutes).toBeNull();
+    expect(result.alternatives[3].assessment?.state).toBe("insufficient-data");
+  });
+
+  it("conserva lluvia al inicio, al final y ausencia sin elegir por horas", () => {
+    const early = compare([0, 1, 0]);
+    const late = compare([0, 0, 1]);
+    const dry = compare([0, 0, 0]);
+    expect(early.alternatives[0].assessment?.rainSignalMinutes).toBe(40);
+    expect(late.alternatives[3].assessment?.rainSignalMinutes).toBe(12); // Tres tramos de 4 min cruzan la hora lluviosa.
+    for (const result of [early, late, dry]) {
+      expect(result.state).toBe("limited");
+      expect(result.bestOffsetMinutes).toBeNull();
+      expect(result.alternatives.every((item) => item.sensitivity.length === 4)).toBe(true);
+    }
+    expect(dry.alternatives.every((item) => item.assessment?.rainSignalMinutes === 0)).toBe(true);
+  });
+
+  it("marca valores ausentes y alternativas sin ruta", () => {
+    const missing = compare([0, null, 0]);
+    expect(missing.state).toBe("insufficient-data");
+    const noRoute = compareDepartures([departures[0], null, departures[2], departures[3]],
+      departures.map((_, index) => forecastFor(index, [0, 0, 0])), [null, "Ruta no disponible", null, null],
+      request.departureAt, Date.parse(request.departureAt));
+    expect(noRoute.state).toBe("insufficient-data");
+    expect(noRoute.alternatives[1].routingError).toBe("Ruta no disponible");
+  });
+
+  it("expone cambios de geometría y tiempos entre salidas", () => {
+    const changed = { ...departures[1],
+      geometry: { ...departures[1].geometry, coordinates: departures[1].geometry.coordinates.map((point, index) =>
+        index === 1 ? [point[0] + 0.001, point[1]] as [number, number] : point) },
+      progress: departures[1].progress.map((point, index) => index === 1 ? {
+        ...point, position: { ...point.position, lon: point.position.lon + 0.001 },
+        durationFromStartSeconds: point.durationFromStartSeconds + 30 } : point),
+    };
+    const result = compareDepartures([departures[0], changed, departures[2], departures[3]],
+      departures.map((_, index) => forecastFor(index, [0, 0, 0])), [null, null, null, null],
+      request.departureAt, Date.parse(request.departureAt));
+    expect(result.alternatives[1].routeChanged).toBe(true);
+    expect(result.alternatives[1].timingChanged).toBe(true);
   });
 });

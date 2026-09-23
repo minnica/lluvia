@@ -10,6 +10,8 @@ Aplicación web móvil para decidir si llevar paraguas o impermeable y cuándo s
 
 **A2 implementada localmente; aceptación con TomTom pendiente (22 de septiembre de 2026):** `/routes` integra routing, geocodificación, mapa, exposición horaria por tramo y favoritos con exportación/importación. Pasan lint, tipos, 15 pruebas sintéticas y build. No hay claves TomTom en este entorno y el sandbox impide abrir un servidor local, por lo que no se ha comprobado un recorrido real ni la interfaz en teléfono. Este trabajo y la indicación de distancia de A1 aún no están desplegados. Detalle y pasos de aceptación en [A2](docs/app-plan.md#a2--recorridos-y-favoritos).
 
+**A3 implementada localmente; validación real pendiente (22 de septiembre de 2026):** `/routes` compara ahora, +10, +20 y +30 minutos con rutas propias y un lote meteorológico compartido. Muestra cobertura, margen de paso ±5/10 minutos y cambios de ruta o tiempo. Con Open-Meteo horario no recomienda una espera como mejor por diferencias que la fuente no puede resolver. Pasan lint, tipos, 19 pruebas y build. Sigue pendiente la comprobación de A2/A3 con TomTom real y teléfono; no se ha desplegado este trabajo. Detalle en [A3](docs/app-plan.md#a3--comparación-de-salida).
+
 ## Contexto y necesidades
 
 - Zona inicial: **San Rafael, Tlalmanalco, Estado de México, México**.
@@ -174,13 +176,19 @@ Guardar rutas significa conservar intención del usuario: nombre, origen, destin
 - Configura `TOMTOM_API_KEY` **solo en servidor** para routing y geocodificación. Configura `NEXT_PUBLIC_TOMTOM_MAP_KEY` para teselas en el navegador, restringida por dominio y producto. Consulta [.env.example](.env.example). Si falta la clave del mapa, puedes usar coordenadas manuales; si falta la clave privada, se informa el error al intentar analizar. La clave privada no se envía a la UI.
 - La PWA guarda `/routes` como interfaz para ver favoritos sin red; mapa, cálculo y clima necesitan conexión. Un análisis de más de 20 minutos se marca como anterior. El muestreo de 4 minutos no convierte un pronóstico horario en uno por minuto, y el relieve aún no se ajusta por falta de elevación fiable por tramo.
 
+## Comparación de A3 en la copia local
+
+- «Comparar cuatro salidas» calcula rutas TomTom para ahora, +10, +20 y +30 minutos desde una misma decisión. Si cambia la geometría o los tiempos, la tarjeta lo indica y el mapa y los tramos muestran la alternativa elegida. Si falla una ruta futura, se conserva su error y no se la sustituye silenciosamente.
+- Las ubicaciones de paso repetidas comparten una consulta meteorológica; cada punto obtiene horas que cubren todas las salidas y un margen ±10 minutos. Para 40 minutos de viaje y 30 de espera se requieren al menos 80 minutos de cobertura desde la decisión, más antigüedad conocida del dato. Si falta cobertura continua, el estado es insuficiente. La hora de emisión del modelo Open-Meteo sigue siendo desconocida.
+- Los minutos presentados son minutos de trayecto que cruzan horas con señal, no minutos realmente bajo lluvia. Los escenarios ±5/10 minutos muestran sensibilidad de la hora de paso y no son confianza estadística. Con las series horarias actuales la app no selecciona una salida como mejor ni suma probabilidades del trayecto.
+
 ## Preparación técnica
 
 - Entorno previsto: Node.js 22.13+ de la rama 22 o Node.js 24, npm 10+.
 - `package-lock.json` fija las dependencias. En este entorno, npm 10.9.8 falló internamente al resolver peers; se generó el lockfile en un directorio limpio con `--legacy-peer-deps` y se comprobó la compatibilidad de peers por separado con `pnpm install --strict-peer-dependencies --frozen-lockfile`. La red impidió completar una instalación limpia con `npm ci`; repetirla en un entorno con acceso estable al registro.
-- En la copia A2, `npm run lint`, `npm run typecheck`, `npm test` (15 casos) y `npm run build` pasan con dependencias locales. Build usa `next build --webpack`: Turbopack falló en este sandbox al intentar abrir un puerto interno para procesar CSS; la opción Webpack de Next 16 compiló correctamente. `npm ci --offline` no terminó porque falta `picomatch` en caché; repetir con red. `next start` sigue bloqueado por `listen EPERM`, así que la automatización de navegador para A2 está pendiente; la prueba manual en Android corresponde a A1. Un primer build A2 falló transitoriamente al leer la configuración TypeScript y pasó al repetirlo aislado.
+- En la copia A3, `npm run lint`, `npm run typecheck`, `npm test` (19 casos) y `npm run build` pasan con dependencias locales. Build usa `next build --webpack`: Turbopack falló antes en este sandbox al intentar abrir un puerto interno para procesar CSS; la opción Webpack de Next 16 compila correctamente. `npm ci --offline` no terminó antes porque falta `picomatch` en caché; repetir con red. `next start` estuvo bloqueado por `listen EPERM`, así que la automatización de navegador para A2/A3 está pendiente; la prueba manual en Android corresponde a A1.
 - Los contratos y factorías están en `src/domain` y `src/server/providers`; el adaptador Open-Meteo está en `src/server/providers/weather/open-meteo.ts`. Los fixtures de prueba son sintéticos y nunca se presentan como pronóstico real.
-- Siguiente paso: validar [A2 con claves TomTom, licencia y teléfono](docs/app-plan.md#a2--recorridos-y-favoritos); después abordar [A3 — comparación de salida](docs/app-plan.md#a3--comparación-de-salida). El próximo despliegue también incluirá la indicación local de distancia de A1.
+- Siguiente paso: validar [A2](docs/app-plan.md#a2--recorridos-y-favoritos) y [A3](docs/app-plan.md#a3--comparación-de-salida) con claves TomTom, licencia, ruta real y teléfono; después abordar [A4](docs/app-plan.md#a4--mvp-diario-y-operación), en especial cuotas/caché de cuatro rutas por consulta. El próximo despliegue también incluirá la indicación local de distancia de A1.
 
 Las variables y contratos previstos se describen en [Track A](docs/app-plan.md) y [contratos compartidos](docs/provider-contracts.md). La ruta habitual y el tipo de observación local del benchmark siguen pendientes; no impiden comenzar la consulta local ni un editor genérico de rutas.
 
