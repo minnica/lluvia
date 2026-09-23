@@ -123,6 +123,36 @@ describe("recorridos A2 con datos sintéticos", () => {
       vi.useRealTimers();
     }
   });
+
+  it("usa Weatherbit también para las cuatro salidas por configuración", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(request.departureAt));
+    vi.stubEnv("TOMTOM_API_KEY", "synthetic-test-key");
+    vi.stubEnv("WEATHER_PROVIDER", "weatherbit");
+    vi.stubEnv("WEATHERBIT_API_KEY", "synthetic-weatherbit-key");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      if (url.hostname === "api.tomtom.com") return Response.json(raw);
+      expect(url.hostname).toBe("api.weatherbit.io");
+      return Response.json({ lat: 19.21, lon: -98.69, data: [
+        { timestamp_utc: "2026-09-22T12:00:00", pop: 20, precip: 0 },
+        { timestamp_utc: "2026-09-22T13:00:00", pop: 20, precip: 0 },
+        { timestamp_utc: "2026-09-22T14:00:00", pop: 20, precip: 0 },
+      ] });
+    });
+    try {
+      const response = await routeWeatherPost(new Request("https://localhost/api/route-weather", { method: "POST",
+        body: JSON.stringify({ origin: request.origin, destination: request.destination, via: request.via,
+          profile: request.profile, avoid: [] }) }));
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.forecast.provider).toBe("weatherbit");
+      expect(body.forecast.points).toHaveLength(10);
+      expect(body.comparison.state).toBe("limited");
+      expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("api.weatherbit.io"))).toHaveLength(10);
+      expect(JSON.stringify(body)).not.toContain("synthetic-weatherbit-key");
+    } finally { fetchMock.mockRestore(); vi.unstubAllEnvs(); vi.useRealTimers(); }
+  });
 });
 
 describe("comparación A3 con datos sintéticos", () => {

@@ -97,6 +97,8 @@ export default function LocalWeather() {
   const safeAssessment = result?.previous && assessment ? { ...assessment, state: "insufficient-data" as const,
     message: "Pronóstico anterior, sin recomendación actual", reason: "Se necesita una consulta nueva para decidir la salida." } : assessment;
   const retrievedAt = point?.values[0]?.retrievedAt;
+  const probabilityEvent = point?.values.find((value) => value.variable === "precipitationProbability")?.probabilityEvent;
+  const source = result ? `${result.forecast.provider}, ${point?.values[0]?.product ?? "producto no informado"}` : "desconocida";
 
   async function selectLocation(id: string, duration = minutes) {
     const location = locations.find((item) => item.id === id) ?? home;
@@ -187,12 +189,12 @@ export default function LocalWeather() {
           {result && safeAssessment ? <>
             <div className={`recommendation ${safeAssessment.state}`}><span className="recommendation-kicker">{safeAssessment.state === "insufficient-data" ? "Datos limitados" : "Orientación"}</span>
               <h3>{safeAssessment.message}</h3><p>{safeAssessment.reason}</p></div>
-            <p className="meta">Periodo solicitado: {formatTime(result.period.start)} – {formatTime(result.period.end)}. Fuente: Open-Meteo, pronóstico horario best_match. Consulta: {retrievedAt ? formatTime(retrievedAt) : "sin fecha"}.</p>
+            <p className="meta">Periodo solicitado: {formatTime(result.period.start)} – {formatTime(result.period.end)}. Fuente: {source}. Consulta: {retrievedAt ? formatTime(retrievedAt) : "sin fecha"}.</p>
             {safeAssessment.state === "rain-signal" && <p className="rain-hours">Horas con señal de lluvia: {safeAssessment.rows.filter((row) => (row.amountMm ?? 0) > 0 || (row.probability ?? 0) >= 0.5).map((row) => `${formatHour(row.period.start)}–${formatHour(row.period.end)}`).join(", ")}.</p>}
             <div className="hourly-list" aria-label="Detalle por hora"><div className="hourly-head"><span>Hora de validez</span><span>Prob.</span><span>Lluvia</span></div>
               {safeAssessment.rows.map((row) => <div className="hourly-row" key={row.period.start}><span>{formatHour(row.period.start)}–{formatHour(row.period.end)}</span><strong>{row.probability === null ? "Sin dato" : `${Math.round(row.probability * 100)} %`}</strong><span>{row.amountMm === null ? "Sin dato" : `${row.amountMm.toFixed(1)} mm`}{row.meanRateMmH === null ? "" : <small> · {row.meanRateMmH.toFixed(1)} mm/h media</small>}</span></div>)}
             </div>
-            <p className="footnote">Cada probabilidad corresponde a más de 0.1 mm en la hora mostrada. Los mm son acumulación de esa hora; mm/h es su intensidad media. Las horas que se cruzan con el periodo elegido se muestran completas. No se estima inicio o fin al minuto.</p>
+            <p className="footnote">Cada probabilidad corresponde a {probabilityEvent?.description.toLowerCase() ?? "un evento de precipitación no especificado"}. Los mm son acumulación de esa hora; mm/h es su intensidad media. Las horas que se cruzan con el periodo elegido se muestran completas. No se estima inicio o fin al minuto.</p>
             {point && <><p className="footnote">Cuadrícula utilizada: {point.resolvedPoint ? `${point.resolvedPoint.lat.toFixed(3)}, ${point.resolvedPoint.lon.toFixed(3)} (a unos ${distanceKm(point.requestedPoint, point.resolvedPoint).toFixed(1)} km de la ubicación consultada)` : "desconocida"}. La distancia puede limitar la representatividad local, especialmente en montaña. Resolución espacial y hora de emisión: no informadas en esta respuesta.</p>
               {point.warnings.length > 0 && <details className="limitations"><summary>Límites de estos datos</summary><ul>{point.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></details>}</>}
           </> : <div className="empty-state">La consulta aparecerá aquí cuando haya datos disponibles.</div>}

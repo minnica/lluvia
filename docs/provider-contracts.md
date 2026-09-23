@@ -1,6 +1,6 @@
 # Contratos compartidos de proveedores
 
-Estado: tipos y validadores Zod de A0 implementados en `src/domain/provider-common.ts`, `src/domain/weather/contracts.ts` y `src/domain/routing/contracts.ts`; factorías de servidor en `src/server/providers`. A1 añadió el adaptador HTTP Open-Meteo; la API de producción devolvió respuestas reales normalizadas para San Rafael con periodos de 30, 60 y 180 minutos y estado `ok`, lo que confirma cobertura técnica, no precisión meteorológica local. A2 añadió el adaptador TomTom y evaluación por tramo; A3 añadió la comparación de cuatro salidas y reutilización de series meteorológicas. Las pruebas de A2/A3 son sintéticas; falta comprobar respuestas TomTom reales. Las interfaces siguen compartidas con el futuro recolector independiente. No se añadió framework de plugins ni microservicios.
+Estado: tipos y validadores Zod de A0 implementados en `src/domain/provider-common.ts`, `src/domain/weather/contracts.ts` y `src/domain/routing/contracts.ts`; factorías de servidor en `src/server/providers`. A1 añadió el adaptador HTTP Open-Meteo; la API de producción devolvió respuestas reales normalizadas para San Rafael con periodos de 30, 60 y 180 minutos y estado `ok`, lo que confirma cobertura técnica, no precisión meteorológica local. A2 añadió el adaptador TomTom y evaluación por tramo; A3 añadió la comparación de cuatro salidas y reutilización de series meteorológicas. A5 añadió localmente Weatherbit Hourly como adaptador alternativo; solo tiene pruebas sintéticas. Las pruebas de A2/A3 también son sintéticas; falta comprobar respuestas TomTom reales. Las interfaces siguen compartidas con el futuro recolector independiente. No se añadió framework de plugins ni microservicios.
 
 ## Principios
 
@@ -113,6 +113,12 @@ En la comprobación real de A1, la API resolvió el punto inicial `19.213346, -9
 
 No añadir métodos como `willRain()` que oculten umbrales o incertidumbre. La estimación de inicio, la comparación de salidas y las recomendaciones pertenecen al dominio. Si faltan minutos, se conserva el dato horario y se publica la limitación.
 
+### Adaptador Weatherbit Hourly de A5
+
+`WeatherbitProvider` consulta `https://api.weatherbit.io/v2.0/forecast/hourly` con `units=M`, entre 12 y 48 horas solicitadas según el horizonte y `WEATHERBIT_API_KEY` solo en servidor. Convierte `pop` de porcentaje a 0–1 y `precip` a acumulación `mm` y media `mm/h` de una hora; un campo ausente queda `null`. La respuesta conserva la coordenada resuelta, el nombre `forecast-hourly`, paso de salida de 60 minutos y `issuedAt`, modelo, paso nativo y resolución espacial desconocidos. El umbral del evento de `pop` no está publicado en la documentación consultada, así que se marca `thresholdMm: null`, `comparison: unknown`. No se mezclan porcentajes de eventos posiblemente distintos con Open-Meteo.
+
+El adaptador asigna `timestamp_utc` a la hora precedente `[H−1 h, H)` según el [ejemplo explícito de Weatherbit sobre acumulaciones](https://help.weatherbit.io/faq/when-is-data-valid-and-how-are-accumulated-values-computed/). La [página del endpoint horario](https://www.weatherbit.io/api/weather-forecast-hourly) también contiene un resumen que habla del intervalo siguiente; hay que contrastar esta discrepancia con una respuesta real o soporte antes de promover Weatherbit. La probabilidad se muestra como horaria con umbral desconocido; su alineación exacta con `precip` requiere la misma comprobación. Los huecos, valores nulos y errores por punto generan cobertura parcial o indisponible. `403`/`401`, `429` y timeout se convierten a errores saneados. La caché de servidor dura 300 s y las respuestas públicas mantienen `no-store`. No existe prueba de acceso ni licencia real en este entorno.
+
 ## RoutingProvider
 
 ```ts
@@ -175,7 +181,7 @@ La evaluación de A2 devuelve tramos con intervalo de paso, valores horarios ori
 - Configuración inicial: `open-meteo` y `tomtom`. Las claves de adaptadores no seleccionados son opcionales.
 - Todos los adaptadores comparten fixtures de contratos y casos de unidades, intervalos, datos parciales y errores.
 - Un adaptador alternativo puede incorporarse y activarse sin migrar IndexedDB ni cambiar endpoints de la aplicación.
-- Las claves de caché incluyen proveedor/producto y versión; cambiar proveedor no reutiliza resultados anteriores como actuales.
+- Las claves de caché HTTP incluyen endpoint/producto y parámetros; cambiar proveedor no reutiliza resultados anteriores como actuales. La versión del adaptador se informa en la respuesta normalizada.
 - Mostrar la fuente efectiva y su resolución. No mezclar proveedores silenciosamente ni promediar sus porcentajes.
 - En un cambio: verificar contrato, cobertura básica del uso previsto, cuotas y respuesta real; cambiar configuración; comprobar flujo crítico y conservar posibilidad de revertir.
 - No es necesario declarar un proveedor definitivo para operar. Una futura calibración local sí requiere evidencia del producto específico al que se aplique.

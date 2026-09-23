@@ -16,7 +16,7 @@ type Entry = { lat: string; lon: string };
 type Draft = { name: string; origin: Entry; destination: Entry; via: Entry[]; profile: "motorcycle" | "car"; avoid: Array<"tolls" | "motorways" | "unpaved"> };
 type Target = "origin" | "destination" | number;
 type SearchResult = { label: string; point: Point };
-type Analysis = { route: Route; assessment: RouteAssessment; comparison: DepartureComparison; weatherError: string | null; source: string };
+type Analysis = { route: Route; assessment: RouteAssessment; comparison: DepartureComparison; weatherError: string | null; source: string; probabilityEvent: string | null };
 const initial: Draft = { name: "", origin: { lat: "19.213346", lon: "-98.755470" }, destination: { lat: "", lon: "" }, via: [], profile: "motorcycle", avoid: [] };
 const entry = (point: Point): Entry => ({ lat: String(point.lat), lon: String(point.lon) });
 const pointOf = (value: Entry): Point | null => {
@@ -92,7 +92,8 @@ export default function RoutePlanner() {
       if (!route || !json.assessment || !Array.isArray(json.assessment.segments) || !json.comparison ||
           !Array.isArray(json.comparison.alternatives) || json.comparison.alternatives.length !== 4) throw new Error("Respuesta de recorrido incompleta");
       setAnalysis({ route, assessment: json.assessment as RouteAssessment, comparison: json.comparison as DepartureComparison, weatherError: json.weatherError,
-        source: json.forecast?.provider ?? "desconocida" });
+        source: json.forecast?.provider ?? "desconocida",
+        probabilityEvent: json.forecast?.points?.[0]?.values?.find((value: { variable: string }) => value.variable === "precipitationProbability")?.probabilityEvent?.description ?? null });
       setClock(Date.parse(route.retrievedAt));
       setStatus("Cuatro salidas calculadas desde el mismo instante de decisión.");
     } catch (error) { if (currentRequest === requestNumber.current) setStatus(error instanceof Error ? error.message : "No se pudo analizar el recorrido"); }
@@ -254,7 +255,7 @@ export default function RoutePlanner() {
               {item.resolvedPoint && <small>Cuadrícula a unos {(distanceM(item.segment.midpoint.position, item.resolvedPoint) / 1000).toFixed(1)} km del punto de paso.</small>}
               {item.warning && <small>{item.warning}</small>}</button></li>;
           })}</ol>
-          <p className="footnote">Cada probabilidad se refiere a más de 0.1 mm en la hora indicada. Cada porcentaje y acumulación pertenece a su hora original; cuando un tramo cruza dos horas se muestra el valor horario mayor, sin sumarlos. Hora de paso calculada con tiempos acumulados de TomTom. El muestreo no aumenta la resolución del pronóstico.</p>
+          <p className="footnote">Cada probabilidad se refiere a {analysis.probabilityEvent?.toLowerCase() ?? "un evento de precipitación no especificado"}. Cada porcentaje y acumulación pertenece a su hora original; cuando un tramo cruza dos horas se muestra el valor horario mayor, sin sumarlos. Hora de paso calculada con tiempos acumulados de TomTom. El muestreo no aumenta la resolución del pronóstico.</p>
         </> : <div className="empty-state">Analiza un recorrido para ver sus tramos y horas de paso.</div>}
       </section></div>
     </div>
@@ -265,7 +266,7 @@ export default function RoutePlanner() {
         : <p className="helper">Aún no hay recorridos guardados.</p>}
       <div className="route-import-export"><button type="button" className="secondary-button" onClick={() => void downloadExport()}>Exportar JSON</button>
         <label htmlFor="route-import">Importar JSON versionado</label><input ref={fileInput} id="route-import" type="file" accept=".json,application/json" onChange={(event) => void upload(event.target.files?.[0])} /></div>
-      <p className="footnote">Se guardan tus puntos y preferencias, no la geometría ni el pronóstico de TomTom u Open-Meteo. Un favorito siempre se vuelve a consultar.</p>
+      <p className="footnote">Se guardan tus puntos y preferencias, no la geometría de TomTom ni pronósticos de proveedores. Un favorito siempre se vuelve a consultar.</p>
     </section>
     <footer className="app-footer"><p>La información meteorológica local es provisional. Pavimento mojado, visibilidad y viento requieren tu propia evaluación.</p></footer>
   </main>;

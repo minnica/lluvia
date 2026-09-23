@@ -1,6 +1,6 @@
 # Track A — Aplicación utilizable
 
-Estado: **A0 y A1 terminadas; A2 y A3 publicadas, pendientes de validación real con TomTom y teléfono; A4 endurecida localmente, pendiente de validación real y publicación; A5 pendiente** (22 de septiembre de 2026). Contexto general en [README](../README.md), acuerdo técnico en [contratos de proveedores](provider-contracts.md) y pasos pendientes en [operación](operations.md).
+Estado: **A0 y A1 terminadas; A2 y A3 publicadas, pendientes de validación real con TomTom y teléfono; A4 endurecida localmente, pendiente de validación real y publicación; A5 implementada localmente para Weatherbit Hourly, pendiente de credenciales y validación en preview** (22 de septiembre de 2026). Contexto general en [README](../README.md), acuerdo técnico en [contratos de proveedores](provider-contracts.md) y pasos pendientes en [operación](operations.md).
 
 ## Objetivo y regla de independencia
 
@@ -55,7 +55,7 @@ La app se usa para decidir antes de salir. Navegación giro a giro y seguimiento
 | A2 🟡 | Rutas y favoritos | A1 y credenciales/licencias geográficas | Publicada y con pruebas sintéticas; falta validar ruta real de unos 40 minutos, mapa y persistencia en teléfono con credenciales. |
 | A3 🟡 | Comparación de salidas | A2 | Publicada y con pruebas sintéticas; falta validar rutas reales y visualización en teléfono. |
 | A4 🟡 | MVP diario estabilizado | A1–A3 y comprobación funcional | Límites, caché y registros implementados localmente; falta prueba real móvil, configuración de cuotas y publicación. |
-| A5 | Evoluciones y sustitución de proveedor | Necesidad concreta y adaptador/configuración disponibles | Cambio reversible con mismo contrato y sin migrar favoritos. |
+| A5 🟡 | Evoluciones y sustitución de proveedor | Necesidad concreta y adaptador/configuración disponibles | Adaptador Weatherbit y reversión por configuración implementados; faltan acceso real, licencia y prueba en preview. |
 
 Ruta crítica: **A0 → A1 → A2 → A3 → A4**. La PWA de A1 se entrega antes del MVP completo. No hay una dependencia de finalización del benchmark en esta secuencia.
 
@@ -212,6 +212,10 @@ No exponer un selector público que permita consumir arbitrariamente las claves 
 - Ejecutar lint, tipos, pruebas relevantes y build al estar configurados. No publicar mientras esos controles funcionales fallen; el benchmark no es un control de publicación.
 
 ## A5 — Cambios posteriores sin rehacer la aplicación
+
+**Implementación local del 22 de septiembre de 2026:** `WeatherbitProvider` usa `/v2.0/forecast/hourly` con unidades métricas y devuelve el contrato `WeatherResponse` que consumen la consulta local y la ruta. `WEATHER_PROVIDER=weatherbit` activa ambos endpoints; `open-meteo` permanece como valor predeterminado y rollback. La UI toma fuente y definición del evento de probabilidad de la respuesta, sin afirmar para Weatherbit el umbral de 0.1 mm propio de Open-Meteo. La caché de `fetch` está separada por URL/producto y dura 300 s. Un pronóstico anterior en IndexedDB sigue fechado y sin recomendación actual tras cambiar de proveedor. El service worker sube a v5; favoritos e IndexedDB siguen en v2.
+
+Los fixtures sintéticos cubren horas precedentes, unidades, nulos, cuotas, clave ausente y selección por configuración. Pasaron lint, tipos, 26 pruebas y build Webpack; el primer build tras los controles falló de forma transitoria al leer `tsc --showConfig`, y el build aislado pasó. **Pendiente para aceptar el cambio operativo:** confirmar acceso y licencia Weatherbit para consulta y copia local, probar una respuesta real en San Rafael y en una ruta, revisar la semántica de la probabilidad horaria y la discrepancia entre dos textos de Weatherbit sobre la ventana de `precip`, medir cobertura/cuotas, activar primero en preview y luego revertir o promover por configuración. A2–A4 siguen con la aceptación real y publicación pendientes. [Pasos operativos](operations.md#cambio-de-proveedor-a5).
 
 ### Sustituir el proveedor meteorológico
 

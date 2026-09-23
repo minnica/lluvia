@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { weatherRequestSchema } from "@/domain/weather/contracts";
-import { createWeatherProvider } from "@/server/providers/weather/factory";
-import { OpenMeteoProvider, WeatherProviderFailure } from "@/server/providers/weather/open-meteo";
+import { operationalWeatherProvider } from "@/server/providers/weather/factory";
+import { WeatherProviderFailure } from "@/server/providers/weather/error";
 import { recordOperation } from "@/server/operation";
 import { checkRequestLimit, limitedResponse } from "@/server/request-limit";
 
@@ -34,7 +34,7 @@ export async function GET(request: Request): Promise<Response> {
   });
   const signal = AbortSignal.any([request.signal, AbortSignal.timeout(10_000)]);
   try {
-    const provider = createWeatherProvider({ "open-meteo": () => new OpenMeteoProvider() });
+    const provider = operationalWeatherProvider();
     const forecast = await provider.getForecast({ ...weatherRequest, signal });
     recordOperation("weather", startedAt, forecast.points[0]?.status === "ok" ? "ok" : "partial", { maxProviderCalls: 1, points: 1 });
     return Response.json({ forecast, period: weatherRequest.period }, { headers: { "Cache-Control": "no-store" } });

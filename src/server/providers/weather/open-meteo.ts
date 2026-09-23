@@ -4,6 +4,7 @@ import { pointSchema } from "@/domain/provider-common";
 import { validateWeatherResponse } from "@/domain/weather/contracts";
 import type { ProductCapability, ProviderError, WeatherProvider, WeatherRequest, WeatherResponse, WeatherValue, Variable } from "@/domain/weather/contracts";
 import { amountToMeanRate, percentageToProbability } from "@/domain/weather/units";
+import { WeatherProviderFailure } from "@/server/providers/weather/error";
 
 const product = "forecast-hourly-best-match";
 const adapterVersion = "1";
@@ -24,10 +25,6 @@ const apiSchema = z.object({
     precipitation: z.array(z.number().finite().nonnegative().nullable()).optional(),
   }),
 });
-
-export class WeatherProviderFailure extends Error {
-  constructor(readonly detail: ProviderError) { super(detail.message); }
-}
 
 function endpoint(): URL {
   const url = new URL(process.env.OPEN_METEO_BASE_URL || "https://api.open-meteo.com/v1/forecast");

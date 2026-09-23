@@ -5,8 +5,8 @@ import { sampleRoute } from "@/domain/routing/sampling";
 import type { Route } from "@/domain/routing/contracts";
 import { getRoute, readRouteInput, routeError } from "@/server/routes/service";
 import { RoutingFailure } from "@/server/providers/routing/tomtom";
-import { createWeatherProvider } from "@/server/providers/weather/factory";
-import { OpenMeteoProvider, WeatherProviderFailure } from "@/server/providers/weather/open-meteo";
+import { operationalWeatherProvider, selectedWeatherId } from "@/server/providers/weather/factory";
+import { WeatherProviderFailure } from "@/server/providers/weather/error";
 import { recordOperation } from "@/server/operation";
 import { checkRequestLimit, limitedResponse } from "@/server/request-limit";
 
@@ -67,11 +67,11 @@ export async function POST(request: Request): Promise<Response> {
     let forecast: WeatherResponse;
     let weatherError: string | null = null;
     try {
-      const provider = createWeatherProvider({ "open-meteo": () => new OpenMeteoProvider() });
+      const provider = operationalWeatherProvider();
       forecast = await provider.getForecast({ ...weatherRequest, signal });
     } catch (error) {
       weatherError = error instanceof WeatherProviderFailure ? error.message : "No se pudo obtener el pronóstico de la ruta";
-      forecast = { schemaVersion: 1, provider: "open-meteo", adapterVersion: "1", requestId: crypto.randomUUID(),
+      forecast = { schemaVersion: 1, provider: selectedWeatherId(), adapterVersion: "1", requestId: crypto.randomUUID(),
         points: weatherRequest.points.map(({ id, position }) => ({ pointId: id, requestedPoint: position, resolvedPoint: null,
           status: "unavailable", values: [], availablePeriods: [], warnings: [],
           error: { code: "unavailable", retryable: true, message: weatherError! } })) };
@@ -91,6 +91,9 @@ export async function POST(request: Request): Promise<Response> {
       { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     recordOperation("route-weather", startedAt, "error", { code: error instanceof RoutingFailure ? error.code : "unexpected" });
+    if (error instanceof WeatherProviderFailure && error.detail.code === "configuration") {
+      return Response.json({ error: error.message, code: "configuration" }, { status: 503, headers: { "Cache-Control": "no-store" } });
+    }
     if (!(error instanceof RoutingFailure) && error instanceof Error && error.message.includes("demasiados puntos")) {
       return Response.json({ error: error.message }, { status: 422, headers: { "Cache-Control": "no-store" } });
     }
