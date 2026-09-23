@@ -1,6 +1,6 @@
 # Contratos compartidos de proveedores
 
-Estado: tipos y validadores Zod de A0 implementados en `src/domain/provider-common.ts`, `src/domain/weather/contracts.ts` y `src/domain/routing/contracts.ts`; factorías de servidor en `src/server/providers`. A1 añadió el adaptador HTTP Open-Meteo y pruebas con respuestas sintéticas. La comprobación de respuesta real en San Rafael está pendiente por falta de acceso de red. Las interfaces siguen compartidas con el futuro recolector independiente. No se añadió framework de plugins ni microservicios.
+Estado: tipos y validadores Zod de A0 implementados en `src/domain/provider-common.ts`, `src/domain/weather/contracts.ts` y `src/domain/routing/contracts.ts`; factorías de servidor en `src/server/providers`. A1 añadió el adaptador HTTP Open-Meteo y pruebas con respuestas sintéticas. La API de producción devolvió respuestas reales normalizadas para San Rafael con periodos de 30, 60 y 180 minutos y estado `ok`; esto confirma cobertura técnica, no precisión meteorológica local. Las interfaces siguen compartidas con el futuro recolector independiente. No se añadió framework de plugins ni microservicios.
 
 ## Principios
 
@@ -108,6 +108,8 @@ Las excepciones globales se traducen a `ProviderError`; fallos de una ubicación
 `OpenMeteoProvider` usa el endpoint Forecast, selección automática `best_match`, zona UTC, unidades mm y series horarias `precipitation_probability`/`precipitation`. La hora publicada cierra el intervalo precedente `[H−1 h, H)` para ambas variables. La probabilidad se normaliza de 0–100 % a 0–1 y el evento es más de 0.1 mm en esa hora. `precipitation` es acumulación `mm`; `precipitationRate` se deriva como media de la misma hora en `mm/h`. No se interpola a minutos. El `resolvedPoint` procede de la cuadrícula devuelta. `model`, `issuedAt`, `nativeStepMinutes` y `spatialResolutionM` quedan `null` cuando la respuesta no los informa, con las marcas de calidad correspondientes. [Semántica oficial de las variables](https://open-meteo.com/en/docs#hourly_parameter_definition).
 
 El adaptador valida estructura, unidades, longitud de series y orden temporal. En lotes, conserva resultados de puntos válidos si falla otro punto; la UI de A1 solicita uno solo. `GET /api/weather` expone el contrato normalizado y limita a 30–360 minutos. Tiene timeout de 10 s y `Cache-Control: no-store`; el navegador conserva la última respuesta en IndexedDB, nunca como vigente sin comprobar los 20 minutos de vigencia. La evaluación local exige cobertura continua y valores no nulos de probabilidad y acumulación. El origen `model` indica pronóstico, no una verificación de precisión.
+
+En la comprobación real de A1, la API resolvió el punto inicial `19.213346, -98.755470` a una cuadrícula en torno a `19.156414, -98.804350`, aproximadamente **8,2 km** de distancia. La respuesta informó probabilidad y precipitación horarias con `outputStepMinutes: 60`; no informó la resolución espacial ni la hora de emisión. La interfaz local ahora muestra la distancia para hacer visible el límite geográfico; ese cambio requiere un nuevo despliegue.
 
 No añadir métodos como `willRain()` que oculten umbrales o incertidumbre. La estimación de inicio, la comparación de salidas y las recomendaciones pertenecen al dominio. Si faltan minutos, se conserva el dato horario y se publica la limitación.
 

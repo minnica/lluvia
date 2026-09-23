@@ -1,6 +1,6 @@
 # Track A — Aplicación utilizable
 
-Estado: **A0 terminada; A1 implementada en código y pendiente de prueba real/instalación; A2–A5 pendientes** (22 de septiembre de 2026). Contexto general en [README](../README.md); acuerdo técnico en [contratos de proveedores](provider-contracts.md).
+Estado: **A0 y A1 terminadas; A2–A5 pendientes** (22 de septiembre de 2026). Contexto general en [README](../README.md); acuerdo técnico en [contratos de proveedores](provider-contracts.md).
 
 ## Objetivo y regla de independencia
 
@@ -51,7 +51,7 @@ La app se usa para decidir antes de salir. Navegación giro a giro y seguimiento
 | Fase | Entrega | Dependencia real | Criterio de salida |
 | --- | --- | --- | --- |
 | A0 ✅ | Base ejecutable y contratos | Entorno Node/npm y acceso a dependencias | Desarrollo/build funcionan; contratos validados con fixtures. Falta repetir `npm ci` con acceso al registro. |
-| A1 ◐ | Primera PWA instalable con consulta local real | A0 y acceso Open-Meteo | Código y pruebas locales listos; falta consulta real, HTTPS y prueba en teléfono. |
+| A1 ✅ | Primera PWA instalable con consulta local real | A0 y acceso Open-Meteo | Consulta real por HTTPS y reapertura sin red desde la app instalada verificadas en teléfono. |
 | A2 | Rutas y favoritos | A1 y credenciales/licencias geográficas | Se guarda y consulta un recorrido con horas de paso. |
 | A3 | Comparación de salidas | A2 | Cuatro alternativas evaluadas o marcadas como insuficientes, sin precisión inventada. |
 | A4 | MVP diario estabilizado | A1–A3 y comprobación funcional | Flujos críticos, errores, offline y consumo revisados; versión utilizable publicada. |
@@ -63,7 +63,7 @@ Ruta crítica: **A0 → A1 → A2 → A3 → A4**. La PWA de A1 se entrega antes
 
 **Estado al 22 de septiembre de 2026:** implementada. `src/app` contiene la página y estilos en español; `src/domain` contiene los esquemas Zod y conversiones básicas; `src/server/providers` contiene factorías sin adaptadores registrados; `tests/fixtures` contiene solo datos sintéticos. TypeScript estricto, ESLint flat, Tailwind/PostCSS, alias `@/*`, `.env.example` y `package-lock.json` están preparados. No se añadieron componentes shadcn/ui porque esta pantalla no los necesita. Mapas y gráficas se incorporarán bajo demanda cuando existan sus flujos.
 
-Pasaron `npm run lint`, `npm run typecheck`, `npm test` (5 casos) y `npm run build`; `npm run dev` inició correctamente. El socket local no fue accesible desde el sandbox para una prueba HTTP. La instalación limpia con `npm ci` sigue sin verificarse por acceso intermitente al registro; npm 10.9.8 también presentó un fallo interno de resolución de peers. El lockfile se generó sin `--force` y los peers se comprobaron por separado con pnpm estricto. Repetir `npm ci` en un entorno con red estable al comenzar A1.
+Pasaron `npm run lint`, `npm run typecheck`, `npm test` (5 casos) y `npm run build`; `npm run dev` inició correctamente. El socket local no fue accesible desde el sandbox para una prueba HTTP. La instalación limpia con `npm ci` sigue sin verificarse por acceso intermitente al registro; npm 10.9.8 también presentó un fallo interno de resolución de peers. El lockfile se generó sin `--force` y los peers se comprobaron por separado con pnpm estricto. Repetir `npm ci` en un entorno con red estable.
 
 - Instalar/resolver las dependencias de `package.json`; comprobar peer dependencies y versiones publicadas. Generar y versionar `package-lock.json`, sin desactivar comprobaciones mediante `--force`.
 - Crear TypeScript estricto, ESLint flat config, Tailwind/PostCSS y alias `@/*`.
@@ -108,7 +108,7 @@ No crear todos los endpoints o directorios por anticipado: añadirlos al entrega
 
 ## A1 — Consulta local instalable
 
-**Estado al 22 de septiembre de 2026:** implementados el adaptador Open-Meteo horario, `/api/weather`, evaluación prudente, pantalla móvil, ubicaciones/preferencias en IndexedDB v1, manifest, iconos y service worker. Pasan lint, tipos, 10 pruebas y build con Webpack; Turbopack quedó bloqueado por un puerto interno del sandbox. Los tests de adaptador/API usan respuestas sintéticas; no se verificó todavía la cobertura real de las coordenadas iniciales. El sandbox carece de DNS para `api.open-meteo.com`, impide abrir sockets locales y no tiene `agent-browser`; tampoco hay proyecto Vercel vinculado ni comprobación en teléfono. Mantener A1 abierta hasta realizar los tres pasos de [verificación pendiente](../README.md#verificación-pendiente-para-cerrar-a1).
+**Estado al 22 de septiembre de 2026: A1 aceptada.** Están implementados el adaptador Open-Meteo horario, `/api/weather`, evaluación prudente, pantalla móvil, ubicaciones/preferencias en IndexedDB v1, manifest, iconos y service worker. Pasan lint, tipos, 10 pruebas y build con Webpack; Turbopack quedó bloqueado por un puerto interno del sandbox. El despliegue de [Vercel](https://lluvia-steel.vercel.app/) en `minnicas-projects/lluvia` figura `READY` y usa el commit `028a972` de `main`. Con la conexión reautorizada se comprobaron portada, manifest, service worker e iconos (`200`), el rechazo de parámetros inválidos (`400`) y respuestas reales de `/api/weather` para 30, 60 y 180 minutos (`200`, `open-meteo`, punto `ok`, `no-store`). La consulta de errores de runtime no encontró errores. El usuario aportó capturas de una consulta vigente en su teléfono y de la reapertura de la app instalada sin Wi-Fi ni datos móviles: el pronóstico anterior seguía visible, fechado y sin recomendación actual. La cuadrícula de la respuesta para las coordenadas iniciales quedó a unos 8,2 km; se añadió una indicación local de distancia pendiente de desplegar. La respuesta real confirma acceso y cobertura temporal, no precisión local. Los [seguimientos](../README.md#validación-de-a1-y-seguimientos) no bloquean la aceptación de A1.
 
 Decisiones concretas: el endpoint acepta una coordenada y 30–360 minutos; la pantalla ofrece 1, 3 y 6 horas o una duración personalizada hasta el fin de exposición. Open-Meteo se consulta con `timezone=UTC`, `past_days=1`, `forecast_days=2`, `precipitation_probability` y `precipitation`. Un valor de hora `H` representa `[H−1 h, H)`. La tasa media de 1 h equivale numéricamente a los mm de esa hora, pero lleva unidad `mm/h` y significado diferente. Si falta cualquiera de las series para cubrir el periodo, si la consulta tiene más de 20 minutos o si se ve una copia anterior, no se emite recomendación actual. El service worker no cachea la API y la copia anterior reside en IndexedDB.
 

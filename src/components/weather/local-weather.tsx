@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pointSchema, periodSchema } from "@/domain/provider-common";
-import type { Period } from "@/domain/provider-common";
+import type { Period, Point } from "@/domain/provider-common";
 import { weatherResponseSchema } from "@/domain/weather/contracts";
 import type { WeatherResponse } from "@/domain/weather/contracts";
 import { assessLocalForecast } from "@/domain/weather/local";
@@ -17,6 +17,14 @@ type Result = { forecast: WeatherResponse; period: Period; previous: boolean };
 const formatTime = (value: string) => new Intl.DateTimeFormat("es-MX", { timeZone: "America/Mexico_City", dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 const formatHour = (value: string) => new Intl.DateTimeFormat("es-MX", { timeZone: "America/Mexico_City", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 const snapshotId = (locationId: string, minutes: number) => `${locationId}:${minutes}`;
+function distanceKm(a: Point, b: Point) {
+  const radians = Math.PI / 180;
+  const latitudeDifference = (b.lat - a.lat) * radians;
+  const longitudeDifference = (b.lon - a.lon) * radians;
+  const squareHalfChord = Math.sin(latitudeDifference / 2) ** 2 +
+    Math.cos(a.lat * radians) * Math.cos(b.lat * radians) * Math.sin(longitudeDifference / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.sqrt(squareHalfChord));
+}
 
 export default function LocalWeather() {
   const [locations, setLocations] = useState<SavedLocation[]>([home]);
@@ -184,7 +192,7 @@ export default function LocalWeather() {
               {safeAssessment.rows.map((row) => <div className="hourly-row" key={row.period.start}><span>{formatHour(row.period.start)}–{formatHour(row.period.end)}</span><strong>{row.probability === null ? "Sin dato" : `${Math.round(row.probability * 100)} %`}</strong><span>{row.amountMm === null ? "Sin dato" : `${row.amountMm.toFixed(1)} mm`}{row.meanRateMmH === null ? "" : <small> · {row.meanRateMmH.toFixed(1)} mm/h media</small>}</span></div>)}
             </div>
             <p className="footnote">Cada probabilidad corresponde a más de 0.1 mm en la hora mostrada. Los mm son acumulación de esa hora; mm/h es su intensidad media. Las horas que se cruzan con el periodo elegido se muestran completas. No se estima inicio o fin al minuto.</p>
-            {point && <><p className="footnote">Cuadrícula utilizada: {point.resolvedPoint ? `${point.resolvedPoint.lat.toFixed(3)}, ${point.resolvedPoint.lon.toFixed(3)}` : "desconocida"}. Resolución espacial y hora de emisión: no informadas en esta respuesta.</p>
+            {point && <><p className="footnote">Cuadrícula utilizada: {point.resolvedPoint ? `${point.resolvedPoint.lat.toFixed(3)}, ${point.resolvedPoint.lon.toFixed(3)} (a unos ${distanceKm(point.requestedPoint, point.resolvedPoint).toFixed(1)} km de la ubicación consultada)` : "desconocida"}. La distancia puede limitar la representatividad local, especialmente en montaña. Resolución espacial y hora de emisión: no informadas en esta respuesta.</p>
               {point.warnings.length > 0 && <details className="limitations"><summary>Límites de estos datos</summary><ul>{point.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></details>}</>}
           </> : <div className="empty-state">La consulta aparecerá aquí cuando haya datos disponibles.</div>}
           <button type="button" className="primary-button" disabled={pending} onClick={() => void fetchForecast(selected, minutes)}>{pending ? "Consultando…" : "Actualizar pronóstico"}</button>
