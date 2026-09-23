@@ -4,7 +4,7 @@ Estado: protocolo propuesto, sin capturas ni resultados. Ubicación principal: *
 
 ## Objetivo y autonomía
 
-Comparar **Open-Meteo, OpenWeather y Weatherbit** con episodios reales para cuantificar utilidad local en lluvia durante los próximos 60 minutos, probabilidad horaria, inicio, cantidad/intensidad, recorridos de unos 40 minutos y alternativas de salida.
+Evaluar primero **Open-Meteo** con episodios reales para cuantificar utilidad local en lluvia durante los próximos 60 minutos, probabilidad horaria, inicio, cantidad/intensidad, recorridos de unos 40 minutos y alternativas de salida. **OpenWeather y Weatherbit quedan como comparadores posibles**, no como contrataciones o integraciones activas. El usuario pospuso Weatherbit el 23 de septiembre de 2026; retomarlo requiere evidencia de imprecisiones de Open-Meteo y comprobar que otro producto aporta una mejora.
 
 Este trabajo puede ejecutarse con un recolector local sin interfaz web. Produce evidencia y recomendaciones sobre proveedores; no es requisito para entregar ni utilizar la aplicación. Consume los [contratos compartidos](provider-contracts.md) y puede implementar sus adaptadores de forma independiente. No requiere esperar a que estén listas las pantallas ni los endpoints de la app.
 
@@ -181,7 +181,7 @@ En un punto, nowcast cada 10 minutos supone 144 consultas/día; hourly cada 30 m
 
 El corredor se captura solo en ventanas prefijadas, reutilizando respuestas válidas y limitando concurrencia. Presupuestar por puntos × productos × capturas, no solo solicitudes HTTP: un batch puede facturarse por ubicación. Detener o reducir capturas según un límite predefinido, registrando el cambio de calendario.
 
-Weatherbit publica un trial de 21 días y hasta 1.500 solicitudes/día. La captura propuesta puede durar más; confirmar acceso a minutely/hourly y presupuesto para continuar. Sus condiciones de almacenamiento están vinculadas a la suscripción; confirmar retención de capturas del trial y de resultados derivados antes de archivarlos. [Planes Weatherbit](https://www.weatherbit.io/pricing).
+Weatherbit publica una prueba de 21 días y hasta 1.500 solicitudes/día. Su plan Free permanente no incluye pronósticos minutely/hourly, y la [FAQ de almacenamiento](https://help.weatherbit.io/faq/can-i-store-data-retrieved-from-the-api-locally/) permite guardar datos solo con una suscripción de pago activa. La captura propuesta puede durar más que la prueba: usar un plan/licencia que permita conservar el archivo experimental u obtener permiso expreso antes de hacerlo. [Planes Weatherbit](https://www.weatherbit.io/pricing).
 
 OpenWeather publica 1.000 llamadas/día gratuitas en One Call; Open-Meteo tiene límites y condiciones de uso no comercial. Fijar límites y comprobar planes vigentes antes del ensayo. [OpenWeather](https://openweathermap.org/price), [Open-Meteo](https://open-meteo.com/en/pricing).
 
