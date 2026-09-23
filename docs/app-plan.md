@@ -1,6 +1,6 @@
 # Track A — Aplicación utilizable
 
-Estado: plan de implementación. Ninguna fase está completada. Contexto general en [README](../README.md); acuerdo técnico en [contratos de proveedores](provider-contracts.md).
+Estado: **A0 implementada y verificada localmente**; A1–A5 pendientes. Contexto general en [README](../README.md); acuerdo técnico en [contratos de proveedores](provider-contracts.md).
 
 ## Objetivo y regla de independencia
 
@@ -50,7 +50,7 @@ La app se usa para decidir antes de salir. Navegación giro a giro y seguimiento
 
 | Fase | Entrega | Dependencia real | Criterio de salida |
 | --- | --- | --- | --- |
-| A0 | Base ejecutable y contratos | Entorno Node/npm y acceso a dependencias | Desarrollo/build funcionan; contratos validados con fixtures. |
+| A0 ✅ | Base ejecutable y contratos | Entorno Node/npm y acceso a dependencias | Desarrollo/build funcionan; contratos validados con fixtures. Falta repetir `npm ci` con acceso al registro. |
 | A1 | Primera PWA instalable con consulta local real | A0 y acceso Open-Meteo | Se instala en un teléfono y resuelve una consulta real con límites visibles. |
 | A2 | Rutas y favoritos | A1 y credenciales/licencias geográficas | Se guarda y consulta un recorrido con horas de paso. |
 | A3 | Comparación de salidas | A2 | Cuatro alternativas evaluadas o marcadas como insuficientes, sin precisión inventada. |
@@ -60,6 +60,10 @@ La app se usa para decidir antes de salir. Navegación giro a giro y seguimiento
 Ruta crítica: **A0 → A1 → A2 → A3 → A4**. La PWA de A1 se entrega antes del MVP completo. No hay una dependencia de finalización del benchmark en esta secuencia.
 
 ## A0 — Base ejecutable
+
+**Estado al 22 de septiembre de 2026:** implementada. `src/app` contiene la página y estilos en español; `src/domain` contiene los esquemas Zod y conversiones básicas; `src/server/providers` contiene factorías sin adaptadores registrados; `tests/fixtures` contiene solo datos sintéticos. TypeScript estricto, ESLint flat, Tailwind/PostCSS, alias `@/*`, `.env.example` y `package-lock.json` están preparados. No se añadieron componentes shadcn/ui porque esta pantalla no los necesita. Mapas y gráficas se incorporarán bajo demanda cuando existan sus flujos.
+
+Pasaron `npm run lint`, `npm run typecheck`, `npm test` (5 casos) y `npm run build`; `npm run dev` inició correctamente. El socket local no fue accesible desde el sandbox para una prueba HTTP. La instalación limpia con `npm ci` sigue sin verificarse por acceso intermitente al registro; npm 10.9.8 también presentó un fallo interno de resolución de peers. El lockfile se generó sin `--force` y los peers se comprobaron por separado con pnpm estricto. Repetir `npm ci` en un entorno con red estable al comenzar A1.
 
 - Instalar/resolver las dependencias de `package.json`; comprobar peer dependencies y versiones publicadas. Generar y versionar `package-lock.json`, sin desactivar comprobaciones mediante `--force`.
 - Crear TypeScript estricto, ESLint flat config, Tailwind/PostCSS y alias `@/*`.

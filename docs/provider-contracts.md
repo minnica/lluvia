@@ -1,6 +1,6 @@
 # Contratos compartidos de proveedores
 
-Estado: diseño previo a implementación. Estos contratos sirven a la aplicación y al recolector independiente. No requieren que ninguno de los tracks haya terminado. Implementar módulos TypeScript sencillos, sin framework de plugins ni microservicios.
+Estado: tipos y validadores Zod de A0 implementados en `src/domain/provider-common.ts`, `src/domain/weather/contracts.ts` y `src/domain/routing/contracts.ts`; factorías de servidor en `src/server/providers`. Las interfaces siguen siendo compartidas con el futuro recolector independiente. Los adaptadores HTTP y la comprobación con respuestas reales corresponden a A1/A2 y Track B. No se añadió framework de plugins ni microservicios.
 
 ## Principios
 
@@ -13,7 +13,7 @@ Estado: diseño previo a implementación. Estos contratos sirven a la aplicació
 
 ## WeatherProvider
 
-Contrato orientativo; se ajustará con pruebas de respuestas reales sin introducir dependencias de la UI:
+Contrato implementado como base; se ajustará con pruebas de respuestas reales sin introducir dependencias de la UI:
 
 ```ts
 type Instant = string; // ISO 8601 UTC, validado en runtime
@@ -99,7 +99,7 @@ interface WeatherProvider {
 }
 ```
 
-Usar Zod para validar coordenadas, rangos, unidades compatibles con la variable y periodos. Al menos uno de `validPeriod`/`validAt` debe ser válido según `temporalMeaning`. Los adaptadores convierten intervalos precedentes/siguientes a límites explícitos; cuando esa semántica no se pueda resolver, el dato no participa en cálculos temporales precisos.
+Zod valida coordenadas, rangos, unidades compatibles con la variable, periodos UTC y su relación con `temporalMeaning`. `validAt` se usa para instantes; las demás clases requieren `validPeriod`. Un `issuedAt: null` exige la marca `unknown-issue-time`. `validateWeatherResponse` también verifica que cada punto solicitado tenga una respuesta correspondiente. Los futuros adaptadores convertirán intervalos precedentes/siguientes a límites explícitos; cuando esa semántica no se pueda resolver, el dato no participará en cálculos temporales precisos.
 
 Las excepciones globales se traducen a `ProviderError`; fallos de una ubicación no eliminan las respuestas válidas del lote. El orquestador impone timeout y concurrencia limitada. Una llamada por lotes puede consumir varias unidades de cuota.
 

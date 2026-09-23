@@ -6,7 +6,7 @@ Aplicación web móvil para decidir si llevar paraguas o impermeable y cuándo s
 
 ## Estado del repositorio
 
-Este repositorio contiene la propuesta de arquitectura, los planes y el manifiesto de dependencias. La aplicación, sus adaptadores y los recolectores del benchmark todavía no están implementados. No se ha comprobado experimentalmente la precisión de ningún proveedor en la ubicación inicial.
+**A0 implementada (22 de septiembre de 2026):** existe una base Next.js ejecutable, configuración estricta, contratos y validadores compartidos, factorías de servidor y pruebas con datos sintéticos. La página inicial indica expresamente que aún no ofrece un pronóstico. Los adaptadores reales, la consulta local, la PWA, las rutas y los recolectores del benchmark siguen pendientes. No se ha comprobado experimentalmente la precisión de ningún proveedor en la ubicación inicial.
 
 ## Contexto y necesidades
 
@@ -65,7 +65,7 @@ La UI debe funcionar con datos horarios y explicar cuándo no puede estimar inic
 | Procesamiento periódico | Ninguno para consultas manuales | Actualización bajo demanda y caché explícita. | Alertas futuras con programador y, solo si hace falta, cola. Recolector independiente para Track B. |
 | Verificación | Vitest + Playwright | Pruebas de contratos, unidades, tiempo y flujos críticos en móvil. | Las pruebas no demostrarán precisión meteorológica. Durante implementación. |
 
-`package.json` declara la base técnica; shadcn/ui se integra copiando solo los componentes necesarios con su CLI. No existe una dependencia de runtime llamada «shadcn/ui». PWA, routing y meteorología utilizarán APIs web/HTTP, sin SDKs obligatorios ni paquetes de base de datos o autenticación.
+`package.json` y `package-lock.json` declaran la base técnica; shadcn/ui se integrará copiando solo los componentes necesarios con su CLI. A0 no necesita todavía componentes shadcn/ui, mapas ni gráficas. No existe una dependencia de runtime llamada «shadcn/ui». PWA, routing y meteorología utilizarán APIs web/HTTP, sin SDKs obligatorios ni paquetes de base de datos o autenticación.
 
 ## Arquitectura del flujo de datos
 
@@ -154,11 +154,10 @@ Guardar rutas significa conservar intención del usuario: nombre, origen, destin
 ## Preparación técnica
 
 - Entorno previsto: Node.js 22.13+ de la rama 22 o Node.js 24, npm 10+.
-- `package.json` contiene rangos estables de dependencias; no hay todavía `package-lock.json` ni instalación verificada.
-- La consulta del registro npm desde la terminal no estuvo disponible al preparar el manifiesto. Next.js/React se contrastaron por documentación/registro web; la resolución completa y compatibilidad se verificarán en A0.
-- A0 generará configuraciones, `src/app`, componentes y lockfile; después se usará `npm ci` para instalaciones reproducibles.
-- Los scripts `dev`, `build`, `start`, `lint`, `typecheck`, `test` y `test:e2e` son la convención prevista; no implican que la app o sus pruebas existan hoy.
-- No ejecutar todavía `npm run dev` esperando una aplicación funcional: faltan layout, páginas y configuración.
+- `package-lock.json` fija las dependencias. En este entorno, npm 10.9.8 falló internamente al resolver peers; se generó el lockfile en un directorio limpio con `--legacy-peer-deps` y se comprobó la compatibilidad de peers por separado con `pnpm install --strict-peer-dependencies --frozen-lockfile`. La red impidió completar una instalación limpia con `npm ci`; repetirla al disponer de acceso al registro antes de publicar.
+- `npm run dev` arranca la página base. `npm run lint`, `npm run typecheck`, `npm test` y `npm run build` pasan con las dependencias resueltas localmente. `npm run test:e2e` se reserva para los flujos de A1 en adelante.
+- Los contratos y las factorías están en `src/domain` y `src/server/providers`; no hay adaptadores registrados todavía. Los fixtures sintéticos viven solo en `tests/fixtures` y nunca se presentan como pronóstico.
+- Siguiente fase: [A1 — consulta local instalable](docs/app-plan.md#a1--consulta-local-instalable). Implementar Open-Meteo, `/api/weather`, ubicación/geolocalización, interpretación prudente de datos horarios y PWA.
 
 Las variables y contratos previstos se describen en [Track A](docs/app-plan.md) y [contratos compartidos](docs/provider-contracts.md). La ruta habitual y el tipo de observación local del benchmark siguen pendientes; no impiden comenzar la consulta local ni un editor genérico de rutas.
 
