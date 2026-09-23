@@ -6,7 +6,7 @@ Aplicación web móvil para decidir si llevar paraguas o impermeable y cuándo s
 
 ## Estado del repositorio
 
-**A0 implementada (22 de septiembre de 2026):** existe una base Next.js ejecutable, configuración estricta, contratos y validadores compartidos, factorías de servidor y pruebas con datos sintéticos. La página inicial indica expresamente que aún no ofrece un pronóstico. Los adaptadores reales, la consulta local, la PWA, las rutas y los recolectores del benchmark siguen pendientes. No se ha comprobado experimentalmente la precisión de ningún proveedor en la ubicación inicial.
+**A1 implementada en código (22 de septiembre de 2026), pendiente de verificación externa:** la app consulta Open-Meteo desde `/api/weather`, conserva los intervalos horarios y ofrece ubicación guardada, entrada manual, geolocalización, recomendación prudente, detalle horario y PWA con lectura de la última consulta sin conexión. Pasan lint, tipos, 10 pruebas y build. En este entorno no se pudo consultar la API real por falta de DNS, abrir el servidor local desde el navegador del sandbox, desplegar por HTTPS ni probar la instalación en un teléfono. Por ello aún no se cumple el criterio completo de salida de A1. Las rutas y el benchmark siguen pendientes; la precisión local no está validada.
 
 ## Contexto y necesidades
 
@@ -151,13 +151,27 @@ Ejemplo: 12 puntos por 3 endpoints son 36 llamadas por análisis antes de caché
 
 Guardar rutas significa conservar intención del usuario: nombre, origen, destino, puntos intermedios y preferencias. Las geometrías y resultados de geocodificación de terceros se almacenarán solo según licencia. Los mapas también requieren atribución. Las claves privadas permanecerán en servidor; una clave pública de cartografía debe restringirse al dominio y servicio permitido.
 
+## Consulta local de A1
+
+- `npm run dev` abre la app; `GET /api/weather?lat=19.213346&lon=-98.755470&minutes=60` devuelve el contrato meteorológico normalizado y el periodo solicitado. Acepta 30–360 minutos; la pantalla ofrece 1, 3 y 6 horas o una duración personalizada hasta el fin de exposición. `WEATHER_PROVIDER=open-meteo` es la selección inicial.
+- El adaptador usa el pronóstico horario automático `best_match`, `timezone=UTC`, probabilidad de más de 0.1 mm en la hora precedente y acumulación de esa hora. La tasa `mm/h` es la media derivada de la acumulación horaria. No se conocen la hora de emisión, el modelo efectivo por variable ni la resolución espacial de la respuesta; la app lo comunica. [Definición oficial de variables horarias](https://open-meteo.com/en/docs#hourly_parameter_definition).
+- IndexedDB `lluvia-local`, versión 1, guarda ubicaciones, preferencia de periodo y último pronóstico por ubicación/periodo. Una consulta anterior se muestra fechada y nunca da una recomendación actual. El límite de vigencia usado por A1 es de 20 minutos; el navegador consulta la red para actualizar. La geolocalización requiere un gesto explícito y se rechaza si declara precisión peor que ±500 m.
+- El manifest, iconos PNG y `public/sw.js` preparan la instalación. El service worker guarda la interfaz y recursos estáticos, pero excluye `/api/`. En iPhone se usa **Compartir → Añadir a pantalla de inicio**. La instalación y apertura sin conexión deben comprobarse en el dispositivo final antes de dar A1 por aceptada.
+- Variables opcionales: `OPEN_METEO_API_KEY` y `OPEN_METEO_BASE_URL`. El endpoint solo admite HTTPS y los hosts `api.open-meteo.com` o `customer-api.open-meteo.com` con ruta `/v1/forecast`; la clave permanece en el servidor. El uso comercial requiere el endpoint y la licencia que correspondan.
+
+### Verificación pendiente para cerrar A1
+
+1. Con acceso de red, ejecutar `npm ci` y consultar la coordenada inicial con `/api/weather`. Comprobar respuesta horaria y campos nulos reales; recibir JSON no demuestra precisión meteorológica local.
+2. Vincular un proyecto de despliegue, publicar por HTTPS y comprobar que la consulta y actualización funcionan sin claves expuestas.
+3. En un teléfono, instalar desde el navegador, abrir desde el icono, guardar una ubicación, denegar geolocalización y usar coordenadas manuales. Desactivar la red y confirmar que abre la interfaz y marca el pronóstico guardado como anterior, sin recomendación actual.
+
 ## Preparación técnica
 
 - Entorno previsto: Node.js 22.13+ de la rama 22 o Node.js 24, npm 10+.
 - `package-lock.json` fija las dependencias. En este entorno, npm 10.9.8 falló internamente al resolver peers; se generó el lockfile en un directorio limpio con `--legacy-peer-deps` y se comprobó la compatibilidad de peers por separado con `pnpm install --strict-peer-dependencies --frozen-lockfile`. La red impidió completar una instalación limpia con `npm ci`; repetirla al disponer de acceso al registro antes de publicar.
-- `npm run dev` arranca la página base. `npm run lint`, `npm run typecheck`, `npm test` y `npm run build` pasan con las dependencias resueltas localmente. `npm run test:e2e` se reserva para los flujos de A1 en adelante.
-- Los contratos y las factorías están en `src/domain` y `src/server/providers`; no hay adaptadores registrados todavía. Los fixtures sintéticos viven solo en `tests/fixtures` y nunca se presentan como pronóstico.
-- Siguiente fase: [A1 — consulta local instalable](docs/app-plan.md#a1--consulta-local-instalable). Implementar Open-Meteo, `/api/weather`, ubicación/geolocalización, interpretación prudente de datos horarios y PWA.
+- `npm run dev` arranca, y `npm run lint`, `npm run typecheck`, `npm test` (10 casos) y `npm run build` pasan con dependencias locales. Build usa `next build --webpack`: Turbopack falló en este sandbox al intentar abrir un puerto interno para procesar CSS; la opción Webpack de Next 16 compiló correctamente. `npm ci --offline` no terminó porque falta `picomatch` en caché; repetir con red. El sandbox impide abrir sockets locales, por lo que la revisión de navegador y el E2E real siguen pendientes.
+- Los contratos y factorías están en `src/domain` y `src/server/providers`; el adaptador Open-Meteo está en `src/server/providers/weather/open-meteo.ts`. Los fixtures de prueba son sintéticos y nunca se presentan como pronóstico real.
+- Siguiente trabajo funcional: cerrar la verificación externa de [A1](docs/app-plan.md#a1--consulta-local-instalable) y continuar con [A2 — recorridos y favoritos](docs/app-plan.md#a2--recorridos-y-favoritos).
 
 Las variables y contratos previstos se describen en [Track A](docs/app-plan.md) y [contratos compartidos](docs/provider-contracts.md). La ruta habitual y el tipo de observación local del benchmark siguen pendientes; no impiden comenzar la consulta local ni un editor genérico de rutas.
 

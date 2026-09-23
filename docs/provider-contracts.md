@@ -1,6 +1,6 @@
 # Contratos compartidos de proveedores
 
-Estado: tipos y validadores Zod de A0 implementados en `src/domain/provider-common.ts`, `src/domain/weather/contracts.ts` y `src/domain/routing/contracts.ts`; factorías de servidor en `src/server/providers`. Las interfaces siguen siendo compartidas con el futuro recolector independiente. Los adaptadores HTTP y la comprobación con respuestas reales corresponden a A1/A2 y Track B. No se añadió framework de plugins ni microservicios.
+Estado: tipos y validadores Zod de A0 implementados en `src/domain/provider-common.ts`, `src/domain/weather/contracts.ts` y `src/domain/routing/contracts.ts`; factorías de servidor en `src/server/providers`. A1 añadió el adaptador HTTP Open-Meteo y pruebas con respuestas sintéticas. La comprobación de respuesta real en San Rafael está pendiente por falta de acceso de red. Las interfaces siguen compartidas con el futuro recolector independiente. No se añadió framework de plugins ni microservicios.
 
 ## Principios
 
@@ -101,7 +101,13 @@ interface WeatherProvider {
 
 Zod valida coordenadas, rangos, unidades compatibles con la variable, periodos UTC y su relación con `temporalMeaning`. `validAt` se usa para instantes; las demás clases requieren `validPeriod`. Un `issuedAt: null` exige la marca `unknown-issue-time`. `validateWeatherResponse` también verifica que cada punto solicitado tenga una respuesta correspondiente. Los futuros adaptadores convertirán intervalos precedentes/siguientes a límites explícitos; cuando esa semántica no se pueda resolver, el dato no participará en cálculos temporales precisos.
 
-Las excepciones globales se traducen a `ProviderError`; fallos de una ubicación no eliminan las respuestas válidas del lote. El orquestador impone timeout y concurrencia limitada. Una llamada por lotes puede consumir varias unidades de cuota.
+Las excepciones globales se traducen a `ProviderError`; fallos de una ubicación no eliminan las respuestas válidas del lote. A1 impone timeout de 10 s a la consulta local; el límite general de concurrencia del orquestador se añadirá con las rutas en A2/A4. Una llamada por lotes puede consumir varias unidades de cuota.
+
+### Adaptador Open-Meteo de A1
+
+`OpenMeteoProvider` usa el endpoint Forecast, selección automática `best_match`, zona UTC, unidades mm y series horarias `precipitation_probability`/`precipitation`. La hora publicada cierra el intervalo precedente `[H−1 h, H)` para ambas variables. La probabilidad se normaliza de 0–100 % a 0–1 y el evento es más de 0.1 mm en esa hora. `precipitation` es acumulación `mm`; `precipitationRate` se deriva como media de la misma hora en `mm/h`. No se interpola a minutos. El `resolvedPoint` procede de la cuadrícula devuelta. `model`, `issuedAt`, `nativeStepMinutes` y `spatialResolutionM` quedan `null` cuando la respuesta no los informa, con las marcas de calidad correspondientes. [Semántica oficial de las variables](https://open-meteo.com/en/docs#hourly_parameter_definition).
+
+El adaptador valida estructura, unidades, longitud de series y orden temporal. En lotes, conserva resultados de puntos válidos si falla otro punto; la UI de A1 solicita uno solo. `GET /api/weather` expone el contrato normalizado y limita a 30–360 minutos. Tiene timeout de 10 s y `Cache-Control: no-store`; el navegador conserva la última respuesta en IndexedDB, nunca como vigente sin comprobar los 20 minutos de vigencia. La evaluación local exige cobertura continua y valores no nulos de probabilidad y acumulación. El origen `model` indica pronóstico, no una verificación de precisión.
 
 No añadir métodos como `willRain()` que oculten umbrales o incertidumbre. La estimación de inicio, la comparación de salidas y las recomendaciones pertenecen al dominio. Si faltan minutos, se conserva el dato horario y se publica la limitación.
 

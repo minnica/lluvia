@@ -1,6 +1,6 @@
 # Track A — Aplicación utilizable
 
-Estado: **A0 implementada y verificada localmente**; A1–A5 pendientes. Contexto general en [README](../README.md); acuerdo técnico en [contratos de proveedores](provider-contracts.md).
+Estado: **A0 terminada; A1 implementada en código y pendiente de prueba real/instalación; A2–A5 pendientes** (22 de septiembre de 2026). Contexto general en [README](../README.md); acuerdo técnico en [contratos de proveedores](provider-contracts.md).
 
 ## Objetivo y regla de independencia
 
@@ -51,7 +51,7 @@ La app se usa para decidir antes de salir. Navegación giro a giro y seguimiento
 | Fase | Entrega | Dependencia real | Criterio de salida |
 | --- | --- | --- | --- |
 | A0 ✅ | Base ejecutable y contratos | Entorno Node/npm y acceso a dependencias | Desarrollo/build funcionan; contratos validados con fixtures. Falta repetir `npm ci` con acceso al registro. |
-| A1 | Primera PWA instalable con consulta local real | A0 y acceso Open-Meteo | Se instala en un teléfono y resuelve una consulta real con límites visibles. |
+| A1 ◐ | Primera PWA instalable con consulta local real | A0 y acceso Open-Meteo | Código y pruebas locales listos; falta consulta real, HTTPS y prueba en teléfono. |
 | A2 | Rutas y favoritos | A1 y credenciales/licencias geográficas | Se guarda y consulta un recorrido con horas de paso. |
 | A3 | Comparación de salidas | A2 | Cuatro alternativas evaluadas o marcadas como insuficientes, sin precisión inventada. |
 | A4 | MVP diario estabilizado | A1–A3 y comprobación funcional | Flujos críticos, errores, offline y consumo revisados; versión utilizable publicada. |
@@ -107,6 +107,10 @@ public/
 No crear todos los endpoints o directorios por anticipado: añadirlos al entregar su funcionalidad. El dominio no importa componentes React ni formatos propios de TomTom/Open-Meteo.
 
 ## A1 — Consulta local instalable
+
+**Estado al 22 de septiembre de 2026:** implementados el adaptador Open-Meteo horario, `/api/weather`, evaluación prudente, pantalla móvil, ubicaciones/preferencias en IndexedDB v1, manifest, iconos y service worker. Pasan lint, tipos, 10 pruebas y build con Webpack; Turbopack quedó bloqueado por un puerto interno del sandbox. Los tests de adaptador/API usan respuestas sintéticas; no se verificó todavía la cobertura real de las coordenadas iniciales. El sandbox carece de DNS para `api.open-meteo.com`, impide abrir sockets locales y no tiene `agent-browser`; tampoco hay proyecto Vercel vinculado ni comprobación en teléfono. Mantener A1 abierta hasta realizar los tres pasos de [verificación pendiente](../README.md#verificación-pendiente-para-cerrar-a1).
+
+Decisiones concretas: el endpoint acepta una coordenada y 30–360 minutos; la pantalla ofrece 1, 3 y 6 horas o una duración personalizada hasta el fin de exposición. Open-Meteo se consulta con `timezone=UTC`, `past_days=1`, `forecast_days=2`, `precipitation_probability` y `precipitation`. Un valor de hora `H` representa `[H−1 h, H)`. La tasa media de 1 h equivale numéricamente a los mm de esa hora, pero lleva unidad `mm/h` y significado diferente. Si falta cualquiera de las series para cubrir el periodo, si la consulta tiene más de 20 minutos o si se ve una copia anterior, no se emite recomendación actual. El service worker no cachea la API y la copia anterior reside en IndexedDB.
 
 - Implementar el adaptador Open-Meteo con `best_match`, probabilidad horaria y precipitación, conservando semántica temporal, unidades y resolución.
 - Validar cobertura técnica para las coordenadas iniciales. Una respuesta de API confirma acceso, no precisión meteorológica local.
