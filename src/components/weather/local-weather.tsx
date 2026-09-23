@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CircleCheck, CircleHelp, CloudDrizzle, CloudRain, CloudRainWind, TriangleAlert } from "lucide-react";
 import SiteHeader from "@/components/site-header";
 import { pointSchema, periodSchema } from "@/domain/provider-common";
-import type { Period, Point } from "@/domain/provider-common";
+import type { Period } from "@/domain/provider-common";
 import { weatherResponseSchema } from "@/domain/weather/contracts";
 import type { WeatherResponse } from "@/domain/weather/contracts";
 import { assessLocalForecast } from "@/domain/weather/local";
 import { describeHourlyRain } from "@/domain/weather/intensity";
+import type { HourlyRainDescription } from "@/domain/weather/intensity";
 import { loadLocalState, loadSnapshot, saveLocation, savePreferences, saveSnapshot } from "@/client/storage/local";
 import type { SavedLocation } from "@/client/storage/local";
 
@@ -17,19 +19,28 @@ const home: SavedLocation = {
 };
 type Result = { forecast: WeatherResponse; period: Period; previous: boolean };
 const formatTime = (value: string) => new Intl.DateTimeFormat("es-MX", { timeZone: "America/Mexico_City", dateStyle: "short", timeStyle: "short" }).format(new Date(value));
-const formatHour = (value: string) => new Intl.DateTimeFormat("es-MX", { timeZone: "America/Mexico_City", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+const formatHour = (value: string) => {
+  const parts = new Intl.DateTimeFormat("es-MX", { timeZone: "America/Mexico_City", hour: "numeric", minute: "2-digit", hour12: true }).formatToParts(new Date(value));
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("hour")}:${part("minute")}${part("dayPeriod").toLowerCase().startsWith("a") ? "am" : "pm"}`;
+};
 const snapshotId = (locationId: string) => `${locationId}:hourly`;
 const HOUR_MS = 3_600_000;
-const formatDay = (value: string) => new Intl.DateTimeFormat("es-MX", { timeZone: "America/Mexico_City", weekday: "short", day: "numeric" }).format(new Date(value));
+const formatDay = (value: string) => {
+  const parts = new Intl.DateTimeFormat("es-MX", { timeZone: "America/Mexico_City", day: "2-digit", month: "2-digit" }).formatToParts(new Date(value));
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("day")}/${part("month")}`;
+};
 const formatAmount = (value: number | null) => value === null ? "—" : value > 0 && value < 0.05 ? "<0.1 mm" : `${value.toFixed(1)} mm`;
-function distanceKm(a: Point, b: Point) {
-  const radians = Math.PI / 180;
-  const latitudeDifference = (b.lat - a.lat) * radians;
-  const longitudeDifference = (b.lon - a.lon) * radians;
-  const squareHalfChord = Math.sin(latitudeDifference / 2) ** 2 +
-    Math.cos(a.lat * radians) * Math.cos(b.lat * radians) * Math.sin(longitudeDifference / 2) ** 2;
-  return 6371 * 2 * Math.asin(Math.sqrt(squareHalfChord));
-}
+const rainOutlook = {
+  "Sin lluvia prevista": { level: "clear", Icon: CircleCheck },
+  "Lluvia posible": { level: "possible", Icon: CircleHelp },
+  "Sin dato": { level: "unknown", Icon: CircleHelp },
+  "Lluvia ligera": { level: "light", Icon: CloudDrizzle },
+  "Lluvia moderada": { level: "moderate", Icon: CloudRain },
+  "Lluvia fuerte": { level: "heavy", Icon: CloudRainWind },
+  "Lluvia muy intensa": { level: "very-heavy", Icon: TriangleAlert },
+} as const satisfies Record<HourlyRainDescription, { level: string; Icon: typeof CircleCheck }>;
 
 export default function LocalWeather() {
   const [locations, setLocations] = useState<SavedLocation[]>([home]);
@@ -100,14 +111,10 @@ export default function LocalWeather() {
   const point = result?.forecast.points[0];
   const assessmentPeriod = result ? { start: new Date(Date.parse(result.period.start) + 2 * HOUR_MS).toISOString(), end: result.period.end } : null;
   const assessment = result && point && assessmentPeriod ? assessLocalForecast(point, assessmentPeriod, clock) : null;
-  const safeAssessment = result?.previous && assessment ? { ...assessment, state: "insufficient-data" as const,
-    message: "Pronóstico anterior, sin recomendación actual", reason: "Se necesita una consulta nueva para decidir la salida." } : assessment;
   const retrievedAt = point?.values[0]?.retrievedAt;
-  const probabilityEvent = point?.values.find((value) => value.variable === "precipitationProbability")?.probabilityEvent;
-  const source = result ? `${result.forecast.provider}, ${point?.values[0]?.product ?? "producto no informado"}` : "desconocida";
-  const hourlyRows = result && safeAssessment ? Array.from({ length: 13 }, (_, index) => {
+  const hourlyRows = result && assessment ? Array.from({ length: 13 }, (_, index) => {
     const start = new Date(Date.parse(result.period.start) + index * HOUR_MS).toISOString();
-    const row = safeAssessment.rows.find((item) => item.period.start === start);
+    const row = assessment.rows.find((item) => item.period.start === start);
     return { start, end: new Date(Date.parse(start) + HOUR_MS).toISOString(), offset: index - 2, row };
   }) : [];
 
@@ -147,56 +154,55 @@ export default function LocalWeather() {
     <main className="app-shell">
       <SiteHeader section="local" />
       <div className="weather-content">
-        <section className="hero weather-hero">
-          <h1>Lluvia por hora</h1>
-          <p>{result?.previous ? `Consulta guardada del ${formatTime(new Date(Date.parse(result.period.start) + 2 * HOUR_MS).toISOString())}` : "De hace 2 horas a las próximas 10."}</p>
-        </section>
-        <section className="location-controls" aria-labelledby="location-title">
-          <div className="location-main">
+        <section className="weather-forecast" aria-labelledby="forecast-title">
+          <div className="location-controls">
             <div className="location-select">
-              <label id="location-title" htmlFor="saved-location">Ubicación</label>
+              <label className="sr-only" htmlFor="saved-location">Ubicación</label>
               <select id="saved-location" value={selectedId} onChange={(event) => void selectLocation(event.target.value)}>
                 {locations.map((location) => <option value={location.id} key={location.id}>{location.name}</option>)}
               </select>
             </div>
-            <button type="button" className="secondary-button" onClick={useGeolocation}>Usar mi ubicación</button>
+            <details className="location-options"><summary aria-label="Opciones de ubicación">Opciones</summary>
+              <button type="button" className="secondary-button" onClick={useGeolocation}>Usar mi ubicación</button>
+              <details className="manual-entry"><summary>Agregar ubicación con coordenadas</summary>
+                <form onSubmit={(event) => { event.preventDefault(); const point = pointSchema.safeParse({ lat: Number(manual.lat), lon: Number(manual.lon) }); if (!point.success || !manual.name.trim() || !manual.lat.trim() || !manual.lon.trim()) { setManualStatus("Escribe un nombre y coordenadas válidas."); return; } void addLocation({ id: crypto.randomUUID(), name: manual.name.trim().slice(0, 60), point: point.data, createdAt: new Date().toISOString() }); setManual({ name: "", lat: "", lon: "" }); }}>
+                  <label htmlFor="place-name">Nombre</label><input id="place-name" required maxLength={60} value={manual.name} onChange={(event) => setManual({ ...manual, name: event.target.value })} placeholder="Casa" />
+                  <div className="field-pair"><div><label htmlFor="lat">Latitud</label><input id="lat" required type="number" step="any" min={-90} max={90} value={manual.lat} onChange={(event) => setManual({ ...manual, lat: event.target.value })} placeholder="19.2133" /></div>
+                    <div><label htmlFor="lon">Longitud</label><input id="lon" required type="number" step="any" min={-180} max={180} value={manual.lon} onChange={(event) => setManual({ ...manual, lon: event.target.value })} placeholder="-98.7555" /></div></div>
+                  <button type="submit" className="secondary-button">Guardar ubicación</button>
+                  {manualStatus && <p className="helper" role="alert">{manualStatus}</p>}
+                </form>
+              </details>
+              {geoStatus && <p className="helper" role="status">{geoStatus}</p>}
+              {storageStatus && <p className="helper" role="status">{storageStatus}</p>}
+            </details>
           </div>
-          <details className="manual-entry"><summary>Agregar ubicación con coordenadas</summary>
-            <form onSubmit={(event) => { event.preventDefault(); const point = pointSchema.safeParse({ lat: Number(manual.lat), lon: Number(manual.lon) }); if (!point.success || !manual.name.trim() || !manual.lat.trim() || !manual.lon.trim()) { setManualStatus("Escribe un nombre y coordenadas válidas."); return; } void addLocation({ id: crypto.randomUUID(), name: manual.name.trim().slice(0, 60), point: point.data, createdAt: new Date().toISOString() }); setManual({ name: "", lat: "", lon: "" }); }}>
-              <label htmlFor="place-name">Nombre</label><input id="place-name" required maxLength={60} value={manual.name} onChange={(event) => setManual({ ...manual, name: event.target.value })} placeholder="Casa" />
-              <div className="field-pair"><div><label htmlFor="lat">Latitud</label><input id="lat" required type="number" step="any" min={-90} max={90} value={manual.lat} onChange={(event) => setManual({ ...manual, lat: event.target.value })} placeholder="19.2133" /></div>
-                <div><label htmlFor="lon">Longitud</label><input id="lon" required type="number" step="any" min={-180} max={180} value={manual.lon} onChange={(event) => setManual({ ...manual, lon: event.target.value })} placeholder="-98.7555" /></div></div>
-              <button type="submit" className="secondary-button">Guardar ubicación</button>
-              {manualStatus && <p className="helper" role="alert">{manualStatus}</p>}
-            </form>
-          </details>
-          {geoStatus && <p className="helper" role="status">{geoStatus}</p>}
-          {storageStatus && <p className="helper" role="status">{storageStatus}</p>}
-        </section>
-        <section className="forecast weather-forecast" aria-labelledby="forecast-title">
-          <div className="weather-heading"><h2 id="forecast-title">Pronóstico en {selected.name}</h2><span>Hora local</span></div>
-          <p className="status-line" role="status">{status}</p>
-          {result && safeAssessment ? <>
-            <div className={`recommendation ${safeAssessment.state}`}>
-              <h3>{safeAssessment.message}</h3><p>{safeAssessment.reason}</p>
-            </div>
-            <p className="meta">Actualizado {retrievedAt ? formatTime(retrievedAt) : "sin fecha"} · {result.forecast.provider}</p>
+          <p className={`status-line${status === "Pronóstico actualizado" ? " sr-only" : ""}`} role="status">{status}</p>
+          <div className="weather-table-heading">
+            <h1 id="forecast-title">Lluvia por hora</h1>
+            {result && assessment && <p className="weather-updated">{result.previous ? `Consulta guardada del ${formatTime(new Date(Date.parse(result.period.start) + 2 * HOUR_MS).toISOString())}` : `Actualizado ${retrievedAt ? formatTime(retrievedAt) : "sin fecha"}`}</p>}
+          </div>
+          {result && assessment ? <>
             <table className="hourly-table" aria-label="Pronóstico por hora">
               <thead><tr><th scope="col">Hora</th><th scope="col">Prob.</th><th scope="col">Lluvia</th><th scope="col">Qué esperar</th></tr></thead>
-              <tbody>{hourlyRows.map(({ start, end, offset, row }) => <tr className={offset === 0 ? "current-hour" : undefined} key={start}>
-                <th scope="row"><strong className="hour-label">{result.previous ? (offset === 0 ? "Hora de consulta" : `${offset > 0 ? "+" : ""}${offset} h`) : offset === 0 ? "Ahora" : offset < 0 ? `Hace ${-offset} h` : `En ${offset} h`}</strong><small>{formatDay(start)} · {formatHour(start)}–{formatHour(end)}</small></th>
-                <td>{row?.probability == null ? "—" : `${Math.round(row.probability * 100)} %`}</td>
-                <td>{formatAmount(row?.amountMm ?? null)}</td>
-                <td className="rain-description">{describeHourlyRain(row?.amountMm ?? null, row?.probability ?? null)}</td>
-              </tr>)}</tbody>
+              <tbody>{hourlyRows.map(({ start, end, offset, row }, index) => {
+                const description = describeHourlyRain(row?.amountMm ?? null, row?.probability ?? null);
+                const { level, Icon } = rainOutlook[description];
+                const dayChanged = index > 0 && formatDay(hourlyRows[index - 1].start) !== formatDay(start);
+                return <tr className={offset === 0 && !result.previous ? "current-hour" : undefined} key={start}>
+                  <th scope="row">
+                    {dayChanged && <span className="hour-day">({formatDay(start)})</span>}
+                    <span className="hour-label">
+                      <span>{formatHour(start)}</span>
+                      <span className="hour-range-end"><span className="hour-separator" aria-hidden="true"> – </span><span className="sr-only"> a </span>{formatHour(end)}</span>
+                    </span>
+                  </th>
+                  <td>{row?.probability == null ? "—" : `${Math.round(row.probability * 100)} %`}</td>
+                  <td>{formatAmount(row?.amountMm ?? null)}</td>
+                  <td className="rain-description"><span className="rain-outlook" data-level={level}><Icon aria-hidden="true" size={16} strokeWidth={2.25} /><span>{description}</span></span></td>
+                </tr>;
+              })}</tbody>
             </table>
-            <p className="footnote">Las horas anteriores son pronósticos, no observaciones. «—» indica que no hay dato.</p>
-            <details className="forecast-details"><summary>Sobre estos datos</summary>
-              <p>Fuente: {source}. Probabilidad de {probabilityEvent?.description.toLowerCase() ?? "precipitación durante esa hora"}. Los mm son acumulación por hora.</p>
-              <p>La descripción usa esa acumulación como intensidad media orientativa: ligera (&lt;2.5 mm), moderada (2.5–&lt;10 mm), fuerte (10–&lt;50 mm) y muy intensa (≥50 mm). No indica picos, truenos ni el minuto de inicio.</p>
-              {point && <><p>Cuadrícula: {point.resolvedPoint ? `${point.resolvedPoint.lat.toFixed(3)}, ${point.resolvedPoint.lon.toFixed(3)} (a ${distanceKm(point.requestedPoint, point.resolvedPoint).toFixed(1)} km)` : "desconocida"}. La precisión local en montaña aún no está validada.</p>
-                {point.warnings.length > 0 && <ul>{point.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}</>}
-            </details>
           </> : <div className="empty-state">{pending ? "Cargando pronóstico horario…" : "Sin pronóstico disponible."}</div>}
           <button type="button" className="primary-button" disabled={pending} onClick={() => void fetchForecast(selected)}>{pending ? "Consultando…" : "Actualizar pronóstico"}</button>
         </section>

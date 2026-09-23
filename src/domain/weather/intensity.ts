@@ -1,6 +1,8 @@
 /** Umbrales de lluvia de la OMM (Guía de instrumentos, I.14-7), aplicados como media horaria orientativa.
  * La guía original usa observaciones de tres minutos; esto no predice picos ni tipo de precipitación. */
-export function describeHourlyRain(amountMm: number | null, probability: number | null): string {
+export type HourlyRainDescription = "Sin lluvia prevista" | "Lluvia posible" | "Sin dato" | "Lluvia ligera" | "Lluvia moderada" | "Lluvia fuerte" | "Lluvia muy intensa";
+
+export function describeHourlyRain(amountMm: number | null, probability: number | null): HourlyRainDescription {
   if (amountMm === null) return probability !== null && probability >= 0.5 ? "Lluvia posible" : "Sin dato";
   if (amountMm === 0) return probability !== null && probability >= 0.5 ? "Lluvia posible" : "Sin lluvia prevista";
   if (amountMm < 2.5) return "Lluvia ligera";
