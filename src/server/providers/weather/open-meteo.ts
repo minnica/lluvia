@@ -7,6 +7,8 @@ import { amountToMeanRate, percentageToProbability } from "@/domain/weather/unit
 
 const product = "forecast-hourly-best-match";
 const adapterVersion = "1";
+// Five minutes is shorter than the application's twenty-minute freshness limit.
+export const OPEN_METEO_CACHE_SECONDS = 300;
 const apiSchema = z.object({
   latitude: z.number().finite(),
   longitude: z.number().finite(),
@@ -139,7 +141,7 @@ export class OpenMeteoProvider implements WeatherProvider {
         if (position.elevationM !== undefined) url.searchParams.set("elevation", String(position.elevationM));
         if (process.env.OPEN_METEO_API_KEY) url.searchParams.set("apikey", process.env.OPEN_METEO_API_KEY);
         let response: Response;
-        try { response = await fetch(url, { cache: "no-store", signal: request.signal }); }
+        try { response = await fetch(url, { signal: request.signal, next: { revalidate: OPEN_METEO_CACHE_SECONDS } }); }
         catch (error) {
           if (request.signal?.aborted || (error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name))) throw failure("timeout", "La consulta meteorológica agotó el tiempo de espera");
           throw failure("unavailable", "Open-Meteo no está disponible");
@@ -150,7 +152,10 @@ export class OpenMeteoProvider implements WeatherProvider {
         }
         let raw: unknown;
         try { raw = await response.json(); } catch { throw failure("invalid-response", "Open-Meteo devolvió JSON inválido", false); }
-        return normalizeOpenMeteo(raw, request, id, new Date().toISOString());
+        const serverDate = Date.parse(response.headers.get("date") ?? "");
+        const retrievedAt = Number.isFinite(serverDate) && serverDate <= Date.now()
+          ? new Date(serverDate).toISOString() : new Date().toISOString();
+        return normalizeOpenMeteo(raw, request, id, retrievedAt);
       } catch (error) {
         const detail = error instanceof WeatherProviderFailure ? error.detail :
           { code: "invalid-response" as const, retryable: false, message: "No se pudo interpretar la respuesta meteorológica" };

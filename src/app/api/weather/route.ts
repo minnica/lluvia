@@ -2,6 +2,8 @@ import { z } from "zod";
 import { weatherRequestSchema } from "@/domain/weather/contracts";
 import { createWeatherProvider } from "@/server/providers/weather/factory";
 import { OpenMeteoProvider, WeatherProviderFailure } from "@/server/providers/weather/open-meteo";
+import { recordOperation } from "@/server/operation";
+import { checkRequestLimit, limitedResponse } from "@/server/request-limit";
 
 export const runtime = "nodejs";
 
@@ -12,9 +14,18 @@ const querySchema = z.object({
 });
 
 export async function GET(request: Request): Promise<Response> {
+  const startedAt = Date.now();
+  const retryAfter = checkRequestLimit(request, "weather", 20);
+  if (retryAfter !== null) {
+    recordOperation("weather", startedAt, "error", { code: "local-rate-limit" });
+    return limitedResponse(retryAfter);
+  }
   const url = new URL(request.url);
   const query = querySchema.safeParse(Object.fromEntries(url.searchParams));
-  if (!query.success) return Response.json({ error: "Coordenadas o periodo inválidos" }, { status: 400, headers: { "Cache-Control": "no-store" } });
+  if (!query.success) {
+    recordOperation("weather", startedAt, "error", { code: "invalid-input" });
+    return Response.json({ error: "Coordenadas o periodo inválidos" }, { status: 400, headers: { "Cache-Control": "no-store" } });
+  }
   const now = Date.now();
   const weatherRequest = weatherRequestSchema.parse({
     points: [{ id: "selected-location", position: { lat: query.data.lat, lon: query.data.lon } }],
@@ -25,11 +36,13 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const provider = createWeatherProvider({ "open-meteo": () => new OpenMeteoProvider() });
     const forecast = await provider.getForecast({ ...weatherRequest, signal });
+    recordOperation("weather", startedAt, forecast.points[0]?.status === "ok" ? "ok" : "partial", { maxProviderCalls: 1, points: 1 });
     return Response.json({ forecast, period: weatherRequest.period }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const detail = error instanceof WeatherProviderFailure ? error.detail :
       { code: "unavailable", retryable: true, message: "No se pudo obtener el pronóstico" };
     const status = detail.code === "configuration" ? 503 : detail.code === "quota" ? 429 : detail.code === "timeout" ? 504 : 502;
+    recordOperation("weather", startedAt, "error", { code: detail.code, maxProviderCalls: 1, points: 1 });
     return Response.json({ error: detail.message, code: detail.code }, { status, headers: { "Cache-Control": "no-store" } });
   }
 }

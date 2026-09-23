@@ -23,7 +23,7 @@ button:disabled { cursor: wait; opacity: .62; }
 .panel { padding: 31px; border: 1px solid #d4dad0; border-radius: 16px; background: #fbfbf7; box-shadow: 0 12px 28px #184a3610; }
 .section-heading { display: flex; align-items: center; gap: 12px; padding-bottom: 22px; margin-bottom: 24px; border-bottom: 1px solid #dce0d8; }
 .section-heading h2 { margin: 0; font-size: 22px; letter-spacing: -.03em; }
-.section-number { color: #b46d3b; }
+.section-number { color: #8b4d2c; }
 label, legend { display: block; margin-bottom: 9px; color: #385b55; font-size: 13px; font-weight: 700; }
 select, input { width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid #b7c9c0; border-radius: 8px; background: white; color: #153c39; }
 .coordinate, .helper, .meta, .footnote, .status-line { color: #60716b; font-size: 12px; line-height: 1.5; }
@@ -49,25 +49,27 @@ summary { cursor: pointer; font-size: 13px; font-weight: 700; color: #155f57; }
 .recommendation { padding: 27px; border-radius: 11px; background: #e8f1e7; border-left: 4px solid #2c8972; }
 .recommendation.rain-signal { background: #f5eddf; border-color: #b87d38; }
 .recommendation.insufficient-data { background: #eef0ed; border-color: #88918c; }
-.recommendation-kicker { color: #697a70; }
+.recommendation-kicker { color: #52645d; }
 .recommendation h3 { margin: 11px 0; font-family: Georgia, serif; font-size: clamp(25px, 3vw, 35px); font-weight: 400; line-height: 1.13; letter-spacing: -.035em; }
 .recommendation p { margin: 0; color: #4c635b; font-size: 13px; line-height: 1.5; }
 .meta { margin: 22px 0; }
 .rain-hours { margin: 0 0 18px; font-size: 13px; line-height: 1.5; font-weight: 700; color: #866038; }
 .hourly-list { border-top: 1px solid #dbe0d9; }
 .hourly-head, .hourly-row { display: grid; grid-template-columns: 1.1fr .55fr 1.1fr; gap: 10px; padding: 12px 2px; border-bottom: 1px solid #e3e6e0; align-items: center; font-size: 13px; font-variant-numeric: tabular-nums; }
-.hourly-head { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #78877f; }
+.hourly-head { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #52645d; }
 .hourly-row strong { color: #155f57; }
-.hourly-row small { color: #72827a; }
+.hourly-row small { color: #52645d; }
 .footnote { margin: 18px 0 0; }
 .limitations { margin: 18px 0; color: #60716b; font-size: 12px; line-height: 1.55; }
 .limitations ul { padding-left: 18px; }
 .empty-state { min-height: 190px; padding: 42px 20px; display: grid; place-items: center; text-align: center; color: #65766d; background: #f1f4ee; border-radius: 8px; }
 .primary-button { margin-top: 24px; width: 100%; border: 1px solid #155f57; color: white; background: #155f57; }
 .primary-button:hover { background: #0d4c46; }
-.app-footer { display: flex; justify-content: space-between; gap: 28px; padding: 35px 0 55px; color: #71817a; font-size: 12px; line-height: 1.5; }
+.app-footer { display: flex; justify-content: space-between; gap: 28px; padding: 35px 0 55px; color: #52645d; font-size: 12px; line-height: 1.5; }
 .app-footer p { max-width: 520px; margin: 0; }
-.text-button { border: 0; padding: 0; color: #155f57; background: none; text-decoration: underline; font-weight: 700; }
+.text-button { min-height: 44px; border: 0; padding: 10px 0; color: #155f57; background: none; text-decoration: underline; font-weight: 700; }
+.brand { min-height: 44px; }
+.manual-entry summary, .limitations summary { min-height: 44px; display: flex; align-items: center; }
 @media (max-width: 800px) { .content-grid { grid-template-columns: 1fr; } .hero { padding: 46px 0 38px; } .app-footer { display: block; } .app-footer p + p { margin-top: 12px; } }
 @media (max-width: 520px) { .app-shell { padding: 0 16px; } .site-header { min-height: 66px; } .header-caption { display: none; } .hero h1 { font-size: clamp(43px, 12vw, 62px); } .panel { padding: 23px 19px; } .hourly-head, .hourly-row { grid-template-columns: 1.05fr .6fr 1.1fr; gap: 5px; font-size: 11px; } .hourly-row small { display: block; } }
 @media (display-mode: standalone) { .install-instructions { display: none; } }

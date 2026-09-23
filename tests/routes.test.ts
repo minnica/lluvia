@@ -87,7 +87,7 @@ describe("recorridos A2 con datos sintéticos", () => {
     vi.setSystemTime(new Date(request.departureAt));
     const previousKey = process.env.TOMTOM_API_KEY;
     process.env.TOMTOM_API_KEY = "synthetic-test-key";
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = new URL(String(input));
       if (url.hostname === "api.tomtom.com") {
         expect(url.searchParams.get("travelMode")).toBe("motorcycle");
@@ -95,6 +95,7 @@ describe("recorridos A2 con datos sintéticos", () => {
         return Response.json(raw);
       }
       expect(url.searchParams.get("timezone")).toBe("UTC");
+      expect(init?.next?.revalidate).toBe(300);
       return Response.json({ latitude: 19.21, longitude: -98.69, utc_offset_seconds: 0,
         hourly_units: { precipitation_probability: "%", precipitation: "mm" },
         hourly: { time: ["2026-09-22T13:00"], precipitation_probability: [20], precipitation: [0] } });
